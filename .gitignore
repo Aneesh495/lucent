@@ -1,0 +1,10 @@
+/target/
+/.agent-local/
+/web/node_modules/
+/web/dist/
+/web/public/engine/
+/web/test-results/
+/web/playwright-report/
+/evidence/
+/dist/
+.DS_Store
