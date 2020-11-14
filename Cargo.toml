@@ -8,6 +8,15 @@ description = "An interactive mathematics workbench with explicit numerical evid
 [lib]
 crate-type = ["rlib", "staticlib"]
 
+[dependencies]
+serde = { version = "=1.0.219", features = ["derive"] }
+serde_json = "=1.0.143"
+
+[build-dependencies]
+cc = "=1.2.36"
+pkg-config = "=0.3.32"
+
+
 [profile.release]
 codegen-units = 1
 lto = "thin"

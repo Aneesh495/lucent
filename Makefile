@@ -12,3 +12,14 @@ build:
 
 test:
 	cargo test --locked
+
+.PHONY: bootstrap-wasm wasm parity
+
+bootstrap-wasm:
+	bash scripts/bootstrap-wasm.sh
+
+wasm:
+	bash scripts/build-wasm.sh
+
+parity: build wasm
+	node scripts/parity.mjs
