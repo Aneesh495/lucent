@@ -5,4 +5,5 @@ mod wire;
 
 pub use wire::request;
 
+pub mod interval;
 pub mod lang;
