@@ -9,8 +9,11 @@ description = "An interactive mathematics workbench with explicit numerical evid
 crate-type = ["rlib", "staticlib"]
 
 [dependencies]
+num-bigint = "=0.4.6"
+num-rational = "=0.4.2"
+num-traits = "=0.2.19"
 serde = { version = "=1.0.219", features = ["derive"] }
-serde_json = "=1.0.143"
+serde_json = { version = "=1.0.143", features = ["float_roundtrip"] }
 
 [build-dependencies]
 cc = "=1.2.36"
