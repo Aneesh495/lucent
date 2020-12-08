@@ -5,7 +5,10 @@ mod wire;
 
 pub use wire::request;
 
+pub mod eval;
 pub mod exact;
 pub mod interval;
 pub mod lang;
+pub mod linear;
 pub mod program;
+pub mod value;
