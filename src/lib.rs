@@ -5,6 +5,7 @@ mod wire;
 
 pub use wire::request;
 
+pub mod differentiate;
 pub mod eval;
 pub mod exact;
 pub mod interval;
