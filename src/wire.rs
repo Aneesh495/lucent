@@ -37,10 +37,14 @@ pub fn request(input: &[u8]) -> Vec<u8> {
     let output = if input.len() > REQUEST_LIMIT {
         json!({"status":"error","message":"Request exceeds 64 KiB"})
     } else {
-        match serde_json::from_slice::<Probe>(input) {
-            Ok(parsed) => probe(parsed).unwrap_or_else(
-                || json!({"status":"unresolved","message":"Invalid or unbounded probe"}),
-            ),
+        match serde_json::from_slice::<Value>(input) {
+            Ok(value) if value.get("op").is_some() => crate::job::execute(value),
+            Ok(value) => match serde_json::from_value::<Probe>(value) {
+                Ok(parsed) => probe(parsed).unwrap_or_else(
+                    || json!({"status":"unresolved","message":"Invalid or unbounded probe"}),
+                ),
+                Err(error) => json!({"status":"error","message":error.to_string()}),
+            },
             Err(error) => json!({"status":"error","message":error.to_string()}),
         }
     };

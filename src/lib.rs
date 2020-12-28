@@ -11,6 +11,7 @@ pub mod eval;
 pub mod exact;
 pub mod graph;
 pub mod interval;
+mod job;
 pub mod lang;
 pub mod linear;
 pub mod polynomial;
