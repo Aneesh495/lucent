@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f3ee">
+    <meta name="description" content="A local graphing workspace for exact values, numerical enclosures, and adaptive geometry.">
+    <title>Lucent · Mathematical workbench</title>
+  </head>
+  <body>
+    <header class="masthead">
+      <a href="./" class="brand" aria-label="Lucent home">
+        <svg width="37" height="37" viewBox="0 0 40 40" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="12" fill="#17433c"/><path d="M9 26c5 0 5-13 10-13s4 13 9 13c2 0 3-2 4-5M12 20h17M20 10v20" stroke="#d4ebc9" stroke-width="1.65" fill="none" stroke-linecap="round"/></svg>
+        <span>Lucent<small>MATHEMATICAL WORKBENCH</small></span>
+      </a>
+      <div class="header-actions">
+        <button id="gallery-button" class="button quiet">Explorations</button>
+        <button id="import-button" class="button quiet">Import</button>
+        <button id="export-button" class="button">Export <span aria-hidden="true">↗</span></button>
+        <input id="file" type="file" accept=".json,application/json" hidden>
+      </div>
+    </header>
+    <main class="workbench">
+      <aside class="sidebar" aria-label="Expression workspace">
+        <div class="sidebar-head">
+          <p class="kicker">01 / WORKSPACE</p>
+          <label class="sr-only" for="title">Document title</label>
+          <input id="title" class="title-input" value="Function study" maxlength="80">
+          <p class="description">Edit an expression to explore its behavior.</p>
+          <div class="actions">
+            <button id="add" class="button primary">+ Expression</button>
+            <button id="undo" class="button icon" aria-label="Undo">↶</button>
+            <button id="redo" class="button icon" aria-label="Redo">↷</button>
+          </div>
+        </div>
+        <section class="expressions" id="expressions" aria-label="Expressions"></section>
+        <section class="parameter-panel" aria-label="Parameters">
+          <div class="section-line"><h2>Parameters</h2><button id="parameter-add" class="text-button" aria-label="Add parameter">+ Add</button></div>
+          <div id="parameters"></div>
+        </section>
+        <section class="keyboard-panel" aria-label="Math keyboard">
+          <h2>Math keyboard</h2>
+          <div id="math-keys"></div>
+        </section>
+        <div class="local-status" id="save-status" role="status">Local document</div>
+      </aside>
+      <section class="main-panel" aria-label="Plot and results">
+        <div class="plot-head">
+          <div>
+            <p class="kicker">02 / VISUALIZATION</p>
+            <h1 id="view-title">Graph canvas</h1>
+          </div>
+          <div class="tabs" aria-label="Workspace view">
+            <button id="graph-tab" aria-pressed="true">Graph</button>
+            <button id="table-tab" aria-pressed="false">Table</button>
+          </div>
+        </div>
+        <div class="plot-toolbar">
+          <div class="plot-status" id="compute-status" role="status"><span class="indicator"></span> Starting engine</div>
+          <div class="toolbar-controls">
+            <label class="sr-only" for="angle">Angle convention</label>
+            <select id="angle"><option value="radians">Radians</option><option value="degrees">Degrees</option></select>
+            <button id="uncertainty" class="button small" aria-pressed="true">Uncertainty</button>
+            <button id="refine" class="button small">Refine</button>
+          </div>
+        </div>
+        <div id="graph-panel" class="graph-panel">
+          <div class="plot" id="plot" role="region" tabindex="0" aria-label="Interactive graph" aria-describedby="navigation-help">
+            <canvas id="grid" aria-hidden="true"></canvas>
+            <canvas id="geometry" aria-hidden="true"></canvas>
+            <canvas id="overlay" aria-hidden="true"></canvas>
+            <span class="plot-label" id="coordinate">x, y</span>
+          </div>
+          <div class="zoom-controls" aria-label="Graph navigation">
+            <button id="zoom-in" class="button icon" aria-label="Zoom in">+</button>
+            <button id="zoom-out" class="button icon" aria-label="Zoom out">−</button>
+            <button id="reset-view" class="button icon" aria-label="Reset viewport">⌂</button>
+          </div>
+        </div>
+        <div id="table-panel" class="table-panel" hidden></div>
+        <div class="plot-foot">
+          <p id="navigation-help">Drag to pan. Scroll to zoom. Focus the graph for arrow and + / − keys.</p>
+          <span id="view-range">x [−8, 8]</span>
+        </div>
+      </section>
+      <aside class="inspector" aria-label="Numerical evidence">
+        <div class="inspector-head">
+          <p class="kicker">03 / EVIDENCE</p>
+          <h2>Inspector</h2>
+          <p class="description">See the calculation behind a result.</p>
+        </div>
+        <div class="inspector-body">
+          <label for="selected-cell">Expression</label>
+          <select id="selected-cell"></select>
+          <label for="operation">Operation</label>
+          <select id="operation">
+            <option value="evaluate">Evaluate scalar</option><option value="enclose">Enclose on an interval</option>
+            <option value="roots">Isolate regular roots</option><option value="polynomial">Count polynomial roots</option>
+            <option value="integral">Integrate on an interval</option><option value="derivative">Compare derivatives</option>
+          </select>
+          <div class="domain-inputs">
+            <label for="lower">Lower / x <input id="lower" value="0" inputmode="decimal"></label>
+            <label for="upper">Upper <input id="upper" value="1" inputmode="decimal"></label>
+          </div>
+          <button id="calculate" class="button primary">Calculate</button>
+          <div id="evidence-result" class="evidence-result" role="status">
+            <span class="badge neutral">READY</span>
+            <p>Choose an operation and calculate to inspect its assumptions and bounds.</p>
+          </div>
+          <button id="save-certificate" class="button small" hidden>Download evidence</button>
+        </div>
+        <div class="legend">
+          <h3>Result labels</h3>
+          <p><i class="dot exact"></i> Exact rational</p>
+          <p><i class="dot enclosed"></i> MPFR enclosure</p>
+          <p><i class="dot approximate"></i> Approximate geometry</p>
+          <p><i class="dot unresolved"></i> Unresolved region</p>
+        </div>
+      </aside>
+    </main>
+    <dialog id="gallery-dialog">
+      <form method="dialog" class="dialog-head"><div><p class="kicker">LUCENT / GALLERY</p><h2>Explorations</h2></div><button class="button">Close</button></form>
+      <div id="gallery-list" class="gallery-list"></div>
+    </dialog>
+    <dialog id="export-dialog">
+      <form method="dialog" class="dialog-head"><div><p class="kicker">LUCENT / EXPORT</p><h2>Save a copy</h2></div><button class="button">Close</button></form>
+      <div id="export-options" class="export-options">
+        <button data-export="document" class="button">Workspace JSON</button>
+        <button data-export="plot" class="button">Plot data JSON</button>
+        <button data-export="svg" class="button">Plot SVG</button>
+        <button data-export="png" class="button">Plot PNG</button>
+      </div>
+    </dialog>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

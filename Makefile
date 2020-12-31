@@ -23,3 +23,18 @@ wasm:
 
 parity: build wasm
 	node scripts/parity.mjs
+
+.PHONY: bootstrap web demo browser-test
+
+bootstrap: bootstrap-wasm
+	cd web && npm ci
+	cd web && npx playwright install chromium --only-shell
+
+web: wasm
+	cd web && npm run build
+
+demo: web
+	cd web && npm run preview -- --port 4173
+
+browser-test: web
+	cd web && npm test
