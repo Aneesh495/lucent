@@ -99,6 +99,10 @@ enum Action {
         expr: String,
         domain: [f64; 2],
     },
+    Improper {
+        expr: String,
+        lower: f64,
+    },
     Derivative {
         expr: String,
         at: f64,
@@ -297,6 +301,14 @@ impl Job {
                     "assumptions":["Full finite interval coverage required","Simpson panels use an enclosed fourth derivative","Range panels use an interval range times panel width"]}),
                 )
             }
+            Action::Improper { expr, lower } => {
+                let expr = inline(&expression(expr)?, &program)?;
+                let result = crate::improper::integrate(&ctx, &expr, *lower)?;
+                Ok(
+                    json!({"status":if result.divergent { "divergent" } else { "improper_enclosure" },
+                    "precision":self.bits,"result":result,"assumptions":[result.method]}),
+                )
+            }
             Action::Derivative { expr, at } => {
                 let expr = expression(expr)?;
                 let derivative = calculus::first_derivative(&ctx, &expr)?;
@@ -316,13 +328,34 @@ impl Job {
                 };
                 let estimate =
                     |h| -> Option<f64> { Some((sample(at + h)? - sample(at - h)?) / (2.0 * h)) };
-                let finite_difference = estimate(h);
+                let finite_difference = estimate(h).filter(|x| x.is_finite());
+                let automatic = crate::dual::forward(&ctx, &expr, *at)
+                    .ok()
+                    .and_then(|d| d.tangent.enclose(self.bits).ok()?.bounds().ok());
+                let condition = (|| {
+                    let value = ctx
+                        .real(&expr, &[("x", [*at; 2])])
+                        .ok()?
+                        .enclose(self.bits)
+                        .ok()?;
+                    let slope = real.enclose(self.bits).ok()?;
+                    Interval::point(*at, self.bits)
+                        .ok()?
+                        .mul(&slope)
+                        .ok()?
+                        .div(&value)
+                        .ok()?
+                        .unary(crate::mp::Unary::Abs)
+                        .ok()?
+                        .bounds()
+                        .ok()
+                })();
                 let comparison = finite_difference
                     .zip(estimate(h * 0.5))
                     .map(|(a, b)| (a - b).abs());
                 Ok(
                     json!({"status":"derivative","precision":self.bits,"equation":derivative.to_string(),
-                    "result":{"symbolic":bound,"finite_difference":finite_difference,"step":h,"step_disagreement":comparison}}),
+                    "result":{"symbolic":bound,"automatic":automatic,"condition":condition,"finite_difference":finite_difference,"step":h,"step_disagreement":comparison}}),
                 )
             }
             Action::Table { expr, samples } => {

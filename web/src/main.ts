@@ -112,6 +112,8 @@ function explain(result: EngineResult): void {
     if (Array.isArray(p.unresolved) && p.unresolved.length) evidence.append(el('p', p.unresolved.length + ' unresolved subintervals'));
     if (Array.isArray(p.symbolic)) {
       evidence.append(el('p', 'Symbolic · ' + textResult({ bounds: p.symbolic })));
+      if (Array.isArray(p.automatic)) evidence.append(el('p', 'Forward mode · ' + textResult({ bounds: p.automatic })));
+      if (Array.isArray(p.condition)) evidence.append(el('p', 'Relative condition · ' + textResult({ bounds: p.condition })));
       evidence.append(el('p', 'Finite difference · ' + (p.finite_difference ?? 'unavailable')));
       if (p.step_disagreement !== null) evidence.append(el('p', 'Step disagreement · ' + p.step_disagreement));
     }
@@ -453,9 +455,10 @@ function calculate(): void {
   const op = operation.value;
   const fields = op === 'evaluate' ? { bindings: { x: lower.value } }
     : op === 'derivative' ? { at: a }
+    : op === 'improper' ? { lower: a }
     : op === 'polynomial' ? { domain: [lower.value, upper.value] }
     : { domain: [a, b] };
-  if (op !== 'polynomial' && op !== 'evaluate' && (!Number.isFinite(a) || op !== 'derivative' && (!Number.isFinite(b) || b <= a))) {
+  if (op !== 'polynomial' && op !== 'evaluate' && (!Number.isFinite(a) || op !== 'derivative' && op !== 'improper' && (!Number.isFinite(b) || b <= a))) {
     explain({ status: 'error', message: 'Enter a finite point or increasing interval.' });
     return;
   }

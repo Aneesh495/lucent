@@ -31,3 +31,23 @@ fn semantic_claim_rejects_excluded_true_value() {
         "rejected"
     );
 }
+
+#[test]
+fn derivatives_and_improper_integrals_use_distinct_contracts() {
+    let comparison = run(json!({"op":"derivative","expr":"exp(x^2)","at":0.9}));
+    assert_eq!(comparison["status"], "derivative");
+    let a = comparison["result"]["automatic"].as_array().unwrap();
+    let s = comparison["result"]["symbolic"].as_array().unwrap();
+    assert!(a[0].as_f64().unwrap() <= s[1].as_f64().unwrap());
+    assert!(s[0].as_f64().unwrap() <= a[1].as_f64().unwrap());
+    let tail = run(json!({"op":"improper","expr":"1/x^3","lower":2}));
+    assert_eq!(tail["result"]["enclosure"], json!([0.125, 0.125]));
+    assert_eq!(
+        run(json!({"op":"improper","expr":"1/x","lower":1}))["status"],
+        "divergent"
+    );
+    assert_eq!(
+        run(json!({"op":"improper","expr":"sin(x)/x","lower":1}))["status"],
+        "unresolved"
+    );
+}

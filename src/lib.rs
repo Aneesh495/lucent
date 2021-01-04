@@ -7,9 +7,11 @@ pub use wire::request;
 
 pub mod calculus;
 pub mod differentiate;
+pub mod dual;
 pub mod eval;
 pub mod exact;
 pub mod graph;
+pub mod improper;
 pub mod interval;
 mod job;
 pub mod lang;
