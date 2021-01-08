@@ -1,0 +1,21 @@
+{
+  "format": "lucent-diagnostic-v1",
+  "datasets": {
+    "scalar": {
+      "cases": 10000,
+      "sha256": "d449d183d2cc33d8feb39409f48bca3df8a06968f83545864d97fa40a1dee0a7"
+    },
+    "graph": {
+      "cases": 2000,
+      "sha256": "d863af18474beab584ba6b03b3d8e237a2b3c2b661c52331c0c13a452b285175"
+    },
+    "adversarial": {
+      "cases": 500,
+      "sha256": "6ad7081eeae8fd51281ae672741af55453a08c85c91d4dcf4c5deba1615376f1"
+    },
+    "calculus": {
+      "cases": 160,
+      "sha256": "17a3881a45382683e0ca9c663c6d9defedf75f30da0c36a6d35a551f56e2b757"
+    }
+  }
+}
