@@ -3,7 +3,7 @@
 pub mod mp;
 mod wire;
 
-pub use wire::request;
+pub use wire::{request, verify_packet};
 
 pub mod calculus;
 pub mod differentiate;

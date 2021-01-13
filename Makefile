@@ -38,3 +38,7 @@ demo: web
 
 browser-test: web
 	cd web && npm test
+
+.PHONY: certificate-check
+certificate-check: build
+	python3 scripts/negative-controls.py "$$(mktemp -d .agent-local/controls.XXXXXXXX)/packets"

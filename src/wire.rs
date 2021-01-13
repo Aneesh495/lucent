@@ -95,3 +95,14 @@ mod abi {
         OUTPUT.with_borrow(Vec::len)
     }
 }
+
+pub fn verify_packet(bytes: &[u8]) -> Value {
+    if bytes.len() > 16 * 1024 * 1024 {
+        return json!({"status":"error","message":"Claim packet exceeds 16 MiB"});
+    }
+    match serde_json::from_slice::<Value>(bytes) {
+        Ok(value) if value["op"] == "verify" => crate::job::execute(value),
+        Ok(_) => json!({"status":"error","message":"Expected a verify packet"}),
+        Err(err) => json!({"status":"error","message":err.to_string()}),
+    }
+}
