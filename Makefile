@@ -42,3 +42,24 @@ browser-test: web
 .PHONY: certificate-check
 certificate-check: build
 	python3 scripts/negative-controls.py "$$(mktemp -d .agent-local/controls.XXXXXXXX)/packets"
+
+ORACLE_PYTHON ?= .agent-local/oracle/bin/python
+RUN_ID ?= diagnostic-$(shell date -u +%Y%m%dT%H%M%SZ)
+PROFILE ?= diagnostic
+
+.PHONY: bootstrap-oracle data numeric-corpus graph-corpus acceptance
+bootstrap-oracle:
+	uv venv --python 3.13 .agent-local/oracle
+	uv pip install --python $(ORACLE_PYTHON) python-flint==0.8.0
+
+data:
+	python3 scripts/workloads.py .agent-local/corpus
+
+numeric-corpus: build wasm
+	$(ORACLE_PYTHON) scripts/campaign.py --run-id "$(RUN_ID)" --profile subset --suites scalar adversarial calculus
+
+graph-corpus: build wasm
+	$(ORACLE_PYTHON) scripts/campaign.py --run-id "$(RUN_ID)" --profile subset --suites graph
+
+acceptance: build wasm
+	$(ORACLE_PYTHON) scripts/campaign.py --run-id "$(RUN_ID)" --profile "$(PROFILE)"
