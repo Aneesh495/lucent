@@ -294,12 +294,15 @@ impl Value {
         }
     }
 
-    pub fn neg(self) -> Result<Self> {
+    pub fn negated(self) -> Result<Self> {
         match self {
             Self::Quantity(q) => Ok(Self::Quantity(Quantity::new(q.real.neg()?, q.dimension))),
             Self::Complex(re, im) => Ok(Self::Complex(re.neg()?, im.neg()?)),
             Self::List(items) => Ok(Self::List(
-                items.into_iter().map(Self::neg).collect::<Result<_>>()?,
+                items
+                    .into_iter()
+                    .map(Self::negated)
+                    .collect::<Result<_>>()?,
             )),
             _ => Err(Issue::Unsupported("Negation needs numbers")),
         }

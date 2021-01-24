@@ -10,7 +10,11 @@ export interface Tile {
   reason?: string;
 }
 export interface Geometry { cells: Tile[]; processed: number; dimension?: [number[], number[]] }
-export interface Layer { cell: Cell; geometry: Geometry }
+export interface Raster {
+  size: [number, number]; rgba: number[]; view: View; undefined_samples: number;
+}
+export interface Arrow { origin: Point; vector: Point }
+export interface Layer { cell: Cell; geometry?: Geometry; raster?: Raster; arrows?: Arrow[] }
 interface Line { a: Point; b: Point; color: string; dashed: boolean }
 interface Rect { x: number; y: number; w: number; h: number; fill: string; hatch: boolean }
 
@@ -167,6 +171,8 @@ export class Renderer {
   private lines: Line[] = [];
   private rects: Rect[] = [];
   private view!: View;
+  private raster: Raster | null = null;
+  private rasterCanvas: HTMLCanvasElement | null = null;
   private selection: Point | null = null;
   private units = ['', ''];
   readonly backend: string;
@@ -217,11 +223,25 @@ export class Renderer {
     this.selection = selection;
     this.lines = [];
     this.rects = [];
+    const raster = [...layers].reverse().find(layer => layer.raster)?.raster ?? null;
+    if (this.raster !== raster) {
+      this.raster = raster;
+      this.rasterCanvas = raster ? document.createElement('canvas') : null;
+      if (this.rasterCanvas && raster) {
+        const [w, h] = raster.size;
+        this.rasterCanvas.width = w;
+        this.rasterCanvas.height = h;
+        const image = new ImageData(new Uint8ClampedArray(raster.rgba), w, h);
+        this.rasterCanvas.getContext('2d')?.putImageData(image, 0, 0);
+      }
+    }
     this.units = [0, 1].map(axis => {
-      const set = new Set(layers.map(layer => axisUnit(layer.geometry.dimension?.[axis] ?? [])));
+      const set = new Set(layers.map(layer => axisUnit(layer.geometry?.dimension?.[axis] ?? [])));
       return set.size === 1 ? [...set][0] : '';
     });
-    for (const { cell, geometry } of layers) {
+    for (const { cell, geometry, arrows } of layers) {
+      if (arrows) this.drawArrows(arrows, cell.color);
+      if (!geometry) continue;
       for (const tile of geometry.cells) {
         if (tile.segment) {
           const segment = clipped(this.project(tile.segment[0]), this.project(tile.segment[1]), this.width, this.height);
@@ -246,6 +266,27 @@ export class Renderer {
     this.drawSelection();
   }
 
+  private drawArrows(arrows: Arrow[], color: string): void {
+    const xscale = this.width / (this.view.x[1] - this.view.x[0]);
+    const yscale = this.height / (this.view.y[1] - this.view.y[0]);
+    for (const { origin, vector } of arrows) {
+      const p = this.project(origin);
+      if (p[0] < 0 || p[0] > this.width || p[1] < 0 || p[1] > this.height) continue;
+      const dx = vector[0] * xscale, dy = -vector[1] * yscale;
+      const norm = Math.hypot(dx, dy);
+      if (!(norm > 0) || !Number.isFinite(norm)) continue;
+      const ux = dx / norm, uy = dy / norm;
+      const span = Math.min(18, 4 + Math.log1p(norm) * 2.3);
+      const tip: Point = [p[0] + ux * span, p[1] + uy * span];
+      const sides: Point[] = [
+        [tip[0] - ux * 4 + uy * 3, tip[1] - uy * 4 - ux * 3],
+        [tip[0] - ux * 4 - uy * 3, tip[1] - uy * 4 + ux * 3],
+      ];
+      this.lines.push({ a: p, b: tip, color, dashed: false });
+      for (const side of sides) this.lines.push({ a: side, b: tip, color, dashed: false });
+    }
+  }
+
   private labels(): { x: number; y: number; text: string; vertical: boolean; zero: boolean }[] {
     const horizontal = ticks(this.view.x, Math.max(2, this.width / 78));
     const vertical = ticks(this.view.y, Math.max(2, this.height / 59));
@@ -260,6 +301,8 @@ export class Renderer {
     const { width, height } = this;
     ctx.fillStyle = '#fcfdf8';
     ctx.fillRect(0, 0, width, height);
+    const picture = this.rasterRectangle();
+    if (picture && this.rasterCanvas) ctx.drawImage(this.rasterCanvas, ...picture);
     for (const r of this.rects) {
       ctx.fillStyle = r.fill;
       ctx.fillRect(r.x, r.y, r.w, r.h);
@@ -346,9 +389,22 @@ export class Renderer {
     return closest ? this.world(closest) : null;
   }
 
+  private rasterRectangle(): [number, number, number, number] | null {
+    if (!this.raster) return null;
+    const { x, y } = this.raster.view;
+    const a = this.project([x[0], y[1]]);
+    const b = this.project([x[1], y[0]]);
+    const rect: [number, number, number, number] = [a[0], a[1], b[0] - a[0], b[1] - a[1]];
+    return rect.every(Number.isFinite) ? rect : null;
+  }
+
   svg(metadata: unknown): string {
     const esc = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
     const { width, height } = this;
+    const picture = this.rasterRectangle();
+    const raster = picture && this.rasterCanvas
+      ? `<image x="${picture[0]}" y="${picture[1]}" width="${picture[2]}" height="${picture[3]}" preserveAspectRatio="none" href="${this.rasterCanvas.toDataURL()}"/>`
+      : '';
     const rects = this.rects.map(r => `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${r.fill}"/>`);
     const axes = this.labels().map(t => t.vertical
       ? `<path d="M${t.x} 0V${height}"/><text x="${t.x + 3}" y="${height - 22}">${t.text}</text>`
@@ -356,7 +412,7 @@ export class Renderer {
     const lines = this.lines.map(l => `<path d="M${l.a.join(' ')}L${l.b.join(' ')}" fill="none" stroke="${l.color}" stroke-width="2"${l.dashed ? ' stroke-dasharray="6 4"' : ''}/>`);
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
       <title>Lucent plot</title><metadata>${esc(JSON.stringify(metadata))}</metadata>
-      <rect width="100%" height="100%" fill="#fcfdf8"/>${rects.join('')}
+      <rect width="100%" height="100%" fill="#fcfdf8"/>${raster}${rects.join('')}
       <g stroke="#dde5dc" font-size="10" font-family="monospace">${axes.join('')}</g>${lines.join('')}</svg>`;
   }
 

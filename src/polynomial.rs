@@ -217,7 +217,9 @@ fn open_count(sequence: &[Polynomial], a: &Rational, b: &Rational) -> Result<usi
     left.checked_sub(right).ok_or(Issue::Range)
 }
 
-fn square_free(poly: &Polynomial) -> Result<(Polynomial, Vec<(usize, Vec<Polynomial>)>)> {
+type Factor = (usize, Vec<Polynomial>);
+
+fn square_free(poly: &Polynomial) -> Result<(Polynomial, Vec<Factor>)> {
     let p = poly.monic()?;
     let mut c = gcd(p.clone(), p.derivative()?)?;
     let distinct = p.quotient(&c)?;
@@ -254,7 +256,7 @@ pub struct Isolation {
     pub processed: usize,
 }
 
-type Factors = [(usize, Vec<Polynomial>)];
+type Factors = [Factor];
 
 fn multiplicity(factors: &Factors, a: &Rational, b: &Rational) -> Result<usize> {
     for (m, sequence) in factors {

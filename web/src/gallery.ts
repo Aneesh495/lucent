@@ -1,6 +1,6 @@
 import { cell, COLORS, HOME, type Mode, type Parameter, type View, type Workspace } from './model';
 
-type Sketch = { source: string; mode?: Mode; horizontal?: string; domain?: [number, number] };
+type Sketch = { source: string; mode?: Mode; horizontal?: string; domain?: [number, number]; initial?: [number, number]; event?: string };
 export interface Exploration {
   title: string;
   lesson: string;
@@ -38,6 +38,9 @@ export const GALLERY: Exploration[] = [
   one('Exact decimals', 'Change a decimal digit and inspect the reduced rational result.', '0.1 + 0.2 - 0.3', 'scalar'),
   one('Rational power', 'Try an exact negative integer exponent and then a noninteger one.', '(2/7)^(-5)', 'scalar'),
   one('Complex rotation', 'Edit the exponent and compare the exact real and imaginary components.', '(1+i)^5', 'scalar'),
+  one('The logarithm cut', 'Hue follows the argument of the principal logarithm. Compare the two sides of the negative real axis.', 'log(z)', 'complex', view([-3, 3], [-2, 2])),
+  one('Principal square root', 'The two sides of the negative axis produce opposite imaginary signs.', 'sqrt(z)', 'complex', view([-3, 3], [-2, 2])),
+  one('Complex zeros and poles', 'Magnitude rings tighten around the zeros and poles of a rational map.', '(z^3-1)/(z^2+1)', 'complex', view([-2, 2], [-2, 2])),
   one('Complex magnitude', 'Recover a rational length from a complex pair.', 'abs(complex(3/2, 2))', 'scalar'),
   one('Centimetres and metres', 'Add compatible lengths. Replace cm with s to see dimensional rejection.', '3m + 25cm', 'scalar'),
   one('Explicit angle', 'Switch the global convention. The explicit degree unit remains an angle.', 'sin(30deg)', 'scalar'),
@@ -69,6 +72,12 @@ export const GALLERY: Exploration[] = [
     sketches: [{ source: 'f(t) := exp(-t^2)', mode: 'definition' }, { source: 'f(x)' }, { source: 'f(x-2)' }], view: view([-4, 6], [-0.2, 1.25]) },
   { title: 'Competing growth rates', lesson: 'Compare a cubic and an exponential. Use a residual equation in the root inspector.',
     sketches: [{ source: 'exp(x)' }, { source: 'x^3' }], view: view([-1, 6], [-4, 100]) },
+  { title: 'A rotating phase plane', lesson: 'The sampled vector field and integrated streamline share the same formula.',
+    sketches: [{ source: 'x', horizontal: '-y', mode: 'field' }, { source: 'x', horizontal: '-y', mode: 'ode', domain: [0, 6.283185307179586] }], view: view([-2, 2], [-2, 2]) },
+  { title: 'Trajectory event', lesson: 'The trajectory ends after an approximate sign-change bracket for y = 0.',
+    sketches: [{ source: '-1', horizontal: '1', mode: 'ode', domain: [0, 4], initial: [-1, 2], event: 'y' }], view: view([-3, 4], [-3, 4]) },
+  { title: 'Fast decay in phase space', lesson: 'An explicit integrator needs smaller steps when the second component decays much faster.',
+    sketches: [{ source: '-1000y', horizontal: '-x', mode: 'ode', domain: [0, 3], initial: [1, 1] }], view: view([-0.1, 1.2], [-0.1, 1.2]) },
   one('A rational near a zero divisor', 'The quotient remains undefined when the exact rational denominator is zero.', '(1/3-0.333333333333333333)/(1/3-1/3)', 'scalar'),
 ];
 
@@ -80,6 +89,8 @@ export function loadExploration(entry: Exploration): Workspace {
       const c = cell(item.source, item.mode, COLORS[index % COLORS.length]);
       if (item.horizontal !== undefined) c.horizontal = item.horizontal;
       if (item.domain !== undefined) c.domain = [...item.domain];
+      if (item.initial) c.initial = [...item.initial];
+      if (item.event) c.event = item.event;
       return c;
     }),
     parameters: entry.parameter ? [{ ...entry.parameter }] : [],

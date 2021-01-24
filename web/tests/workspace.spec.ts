@@ -58,7 +58,7 @@ test('loads a gallery example, keyboard edits, and avoids narrow overflow', asyn
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   await page.getByRole('button', { name: 'Explorations' }).click();
-  await expect(page.locator('#gallery-list button')).toHaveCount(45);
+  await expect(page.locator('#gallery-list button')).toHaveCount(51);
   await page.getByRole('button', { name: /^Repeated roots/ }).click();
   await expect(page.getByRole('textbox', { name: 'Document title' })).toHaveValue('Repeated roots');
   await settled(page);

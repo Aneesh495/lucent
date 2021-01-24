@@ -97,7 +97,7 @@ impl<'a> Eval<'a> {
                 }
                 self.constant(name)
             }
-            Kind::Negative(expr) => self.inner(expr, locals, depth + 1)?.neg(),
+            Kind::Negative(expr) => self.inner(expr, locals, depth + 1)?.negated(),
             Kind::Binary(op, a, b) => {
                 let a = self.inner(a, locals, depth + 1)?;
                 let b = self.inner(b, locals, depth + 1)?;
@@ -325,6 +325,51 @@ impl<'a> Eval<'a> {
                 let real = scale.arithmetic(Op::Mul, &im.unary(Unary::Cos, bits)?, bits)?;
                 let imag = scale.arithmetic(Op::Mul, &im.unary(Unary::Sin, bits)?, bits)?;
                 Ok(Value::Complex(real, imag))
+            }
+            "ln" | "log" => {
+                let magnitude = radius_squared()?.unary(Unary::Log, bits)?.arithmetic(
+                    Op::Div,
+                    &Real::integer(2),
+                    bits,
+                )?;
+                let angle = im.enclose(bits)?.principal_argument(&re.enclose(bits)?)?;
+                Ok(Value::Complex(magnitude, Real::Bounded(angle)))
+            }
+            "sqrt" => {
+                if im.is_zero() {
+                    if re.sign() == Some(std::cmp::Ordering::Less) {
+                        return Ok(Value::Complex(
+                            Real::integer(0),
+                            re.neg()?.unary(Unary::Sqrt, bits)?,
+                        ));
+                    }
+                    if re.sign().is_some() {
+                        return Ok(Value::Complex(
+                            re.unary(Unary::Sqrt, bits)?,
+                            Real::integer(0),
+                        ));
+                    }
+                }
+                let r = radius_squared()?.unary(Unary::Sqrt, bits)?;
+                let two = Real::integer(2);
+                let component = |op| -> NumericResult<Real> {
+                    let part = r
+                        .arithmetic(op, &re, bits)?
+                        .arithmetic(Op::Div, &two, bits)?;
+                    Ok(Real::Bounded(
+                        part.enclose(bits)?.nonnegative_part()?.unary(Unary::Sqrt)?,
+                    ))
+                };
+                let real = component(Op::Add)?;
+                let imaginary = match im.sign() {
+                    Some(std::cmp::Ordering::Less) => component(Op::Sub)?.neg()?,
+                    Some(std::cmp::Ordering::Greater) => component(Op::Sub)?,
+                    _ if re.sign() == Some(std::cmp::Ordering::Greater) => {
+                        im.arithmetic(Op::Div, &two.arithmetic(Op::Mul, &real, bits)?, bits)?
+                    }
+                    _ => return Err(Issue::Split("Principal square root crosses its branch cut")),
+                };
+                Ok(Value::Complex(real, imaginary))
             }
             _ => Err(Issue::Unsupported(
                 "Complex function is outside the supported branch contract",

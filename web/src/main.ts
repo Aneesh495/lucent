@@ -3,7 +3,7 @@ import { Runner, type EngineResult, type EngineTask } from './engine';
 import { GALLERY, loadExploration } from './gallery';
 import { COLORS, HOME, LIMIT, MODES, History, cell, decode, domain, environment, load, save,
   type Angle, type Cell, type Mode, type Point, type View, type Workspace } from './model';
-import { Renderer, coordinate, type Geometry, type Layer } from './renderer';
+import { Renderer, coordinate, type Geometry, type Layer, type Raster, type Arrow } from './renderer';
 
 function id<T extends HTMLElement>(key: string): T {
   const element = document.getElementById(key);
@@ -171,7 +171,7 @@ function patch(key: string, change: Partial<Cell>, rebuild = false, recompute = 
   if (!recompute) draw();
 }
 
-function inputFor(c: Cell, property: 'source' | 'horizontal', text: string): HTMLInputElement {
+function inputFor(c: Cell, property: 'source' | 'horizontal' | 'event', text: string): HTMLInputElement {
   const input = el('input', undefined, 'expression-input');
   input.value = c[property];
   input.maxLength = 8192;
@@ -231,13 +231,14 @@ function renderDocument(): void {
         draft.cells = draft.cells.filter(item => item.id !== c.id);
       }, { rebuild: true }));
       heading.append(color, mode, remove);
-      const input = inputFor(c, 'source', c.mode === 'parametric' ? 'Vertical expression' : 'Expression');
+      const input = inputFor(c, 'source', c.mode === 'parametric' ? 'Vertical expression' : c.mode === 'field' || c.mode === 'ode' ? 'dy/dt expression' : 'Expression');
       const meta = el('p', '', 'cell-meta');
       meta.id = 'diagnostic-' + c.id;
       input.setAttribute('aria-describedby', meta.id);
       node.append(heading, input);
       if (c.mode === 'parametric') node.append(inputFor(c, 'horizontal', 'Horizontal expression'));
-      if (c.mode === 'parametric' || c.mode === 'polar') {
+      if (c.mode === 'ode' || c.mode === 'field') node.append(inputFor(c, 'horizontal', 'dx/dt expression'));
+      if (c.mode === 'parametric' || c.mode === 'polar' || c.mode === 'ode') {
         const range = el('div', undefined, 'cell-domain');
         for (const index of [0, 1] as const) {
           const label = el('label', index === 0 ? 't min' : 't max');
@@ -253,6 +254,28 @@ function renderDocument(): void {
           range.append(label);
         }
         node.append(range);
+      }
+      if (c.mode === 'ode') {
+        const start = el('div', undefined, 'cell-domain');
+        for (const index of [0, 1] as const) {
+          const label = el('label', index === 0 ? 'x₀' : 'y₀');
+          const value = el('input');
+          value.value = String(c.initial[index]);
+          value.inputMode = 'decimal';
+          value.addEventListener('change', () => {
+            const next = [...history.current.cells.find(item => item.id === c.id)!.initial] as Point;
+            if (Number.isFinite(Number(value.value))) {
+              next[index] = Number(value.value);
+              patch(c.id, { initial: next });
+            }
+          });
+          label.append(value);
+          start.append(label);
+        }
+        node.append(start);
+        const eventInput = inputFor(c, 'event', 'Event residual');
+        eventInput.placeholder = 'Optional event, e.g. x - 1';
+        node.append(eventInput);
       }
       node.append(meta);
       const actions = el('div', undefined, 'cell-actions');
@@ -328,6 +351,17 @@ function diagnose(key: string, response: EngineResult): void {
     const geometry = response.result as Geometry;
     const uncertain = geometry.cells.filter(tile => tile.kind === 'unresolved' || tile.kind === 'crossing').length;
     node.textContent = uncertain ? uncertain + ' unresolved cells' : 'Approximate geometry';
+  } else if (response.result && typeof response.result === 'object' && 'samples' in response.result) {
+    const trajectory = response.result as Trajectory;
+    node.textContent = trajectory.samples.length + ' samples · ' +
+      (trajectory.stiffness_warning ? 'stiffness suspected' : trajectory.event ? 'event bracketed' : trajectory.reason ?? 'approximate trajectory') +
+      (trajectory.local_box ? ' · validated first step' : '');
+  } else if (kind === 'approximate_field') {
+    const field = response.result as { arrows: Arrow[] };
+    node.textContent = field.arrows.length + ' sampled vectors';
+  } else if (kind === 'approximate_coloring') {
+    const raster = response.result as Raster;
+    node.textContent = raster.size.join(' × ') + ' samples · ' + raster.undefined_samples + ' undefined';
   } else if (kind === 'syntax') node.textContent = 'Definition compiled';
   else node.textContent = kind.replaceAll('_', ' ') + ' · ' + textResult(response.result);
 }
@@ -341,15 +375,23 @@ function draw(): void {
   });
 }
 
+interface Trajectory {
+  samples: { state: Point }[];
+  event?: unknown; reason?: string; stiffness_warning: boolean; local_box?: unknown;
+}
 function taskFor(c: Cell, preview: boolean): EngineTask {
   const doc = history.current;
   const shared = environment(doc);
   const base = { ...shared, expr: c.source };
   if (c.mode === 'definition') return { key: c.id, request: { ...base, op: 'inspect', expr: '0' } };
   if (c.mode === 'scalar') return { key: c.id, request: { ...base, op: 'evaluate' } };
+  const view = { ...structuredClone(liveView), pixels: [Math.min(renderer.width, 4096), Math.min(renderer.height, 4096)] };
+  if (c.mode === 'field') return { key: c.id, request: { ...shared, op: 'field', dx: c.horizontal, dy: c.source, view, grid: 13 } };
+  if (c.mode === 'ode') return { key: c.id, request: { ...shared, op: 'ode', dx: c.horizontal, dy: c.source,
+    time: c.domain, initial: c.initial, event: c.event.trim() || null, validated: true, tolerance: 1e-8, budget: 2000 } };
   return { key: c.id, request: {
-    ...base, op: 'graph', mode: c.mode, horizontal: c.horizontal,
-    view: { ...structuredClone(liveView), pixels: [Math.min(renderer.width, 4096), Math.min(renderer.height, 4096)] },
+    ...base, op: c.mode === 'complex' ? 'color' : 'graph', mode: c.mode, horizontal: c.horizontal,
+    view,
     ...(c.mode === 'parametric' || c.mode === 'polar' ? { domain: c.domain } : {}),
     bits: preview ? 64 : 96,
     budget: preview ? 1200 : refinement,
@@ -369,17 +411,29 @@ function compute(expected: number, preview: boolean): void {
     if (response.status === 'approximate_geometry') {
       const c = cells.find(item => item.id === key)!;
       layers.set(key, { layer: { cell: c, geometry: response.result as Geometry }, request: lookup.get(key)!, response });
+    } else if (response.status === 'approximate_coloring') {
+      const c = cells.find(item => item.id === key)!;
+      layers.set(key, { layer: { cell: c, raster: response.result as Raster }, request: lookup.get(key)!, response });
+    } else if (response.status === 'approximate_field') {
+      const c = cells.find(item => item.id === key)!;
+      layers.set(key, { layer: { cell: c, arrows: (response.result as { arrows: Arrow[] }).arrows }, request: lookup.get(key)!, response });
+    } else if (response.result && typeof response.result === 'object' && 'samples' in response.result) {
+      const c = cells.find(item => item.id === key)!;
+      const samples = (response.result as Trajectory).samples;
+      const geometry: Geometry = { processed: samples.length, cells: samples.slice(1).map((sample, index) =>
+        ({ kind: 'segment', segment: [samples[index].state, sample.state] })) };
+      layers.set(key, { layer: { cell: c, geometry }, request: lookup.get(key)!, response });
     } else layers.delete(key);
     draw();
   }, () => {
     if (expected !== revision) return;
-    if (preview && tasks.some(task => task.request.op === 'graph')) {
+    if (preview && tasks.some(task => task.request.op === 'graph' || task.request.op === 'color')) {
       status('refining', 'Preview shown · refining');
       computeTimer = window.setTimeout(() => compute(expected, false), 55);
     } else {
       settled = true;
-      const count = [...layers.values()].reduce((sum, item) => sum + item.layer.geometry.cells
-        .filter(t => t.kind === 'unresolved' || t.kind === 'crossing').length, 0);
+      const count = [...layers.values()].reduce((sum, item) => sum + (item.layer.geometry?.cells
+        .filter(t => t.kind === 'unresolved' || t.kind === 'crossing').length ?? item.layer.raster?.undefined_samples ?? 0), 0);
       status('settled', renderer.backend + (count ? ' · ' + count + ' unresolved' : ' · Current'));
     }
   }, message => status('error', message));

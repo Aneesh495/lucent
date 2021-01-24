@@ -2,7 +2,7 @@ export const COLORS = ['#255e50', '#3f5ca1', '#b05b36', '#875091', '#187c89', '#
 export const MODES = {
   explicit: 'Explicit y = f(x)', implicit: 'Implicit equation', region: 'Inequality region',
   parametric: 'Parametric curve', polar: 'Polar curve', scalar: 'Scalar calculation',
-  definition: 'Definition',
+  definition: 'Definition', complex: 'Complex coloring', field: 'Vector field', ode: 'ODE trajectory',
 } as const;
 export type Mode = keyof typeof MODES;
 export type Point = [number, number];
@@ -21,6 +21,8 @@ export interface Cell {
   horizontal: string;
   domain: Domain;
   visible: boolean;
+  initial: Point;
+  event: string;
   color: string;
   style: 'solid' | 'dashed';
   folder: string;
@@ -52,7 +54,7 @@ export const LIMIT = 196_608;
 export function cell(source: string, mode: Mode = 'explicit', color = COLORS[0]): Cell {
   return {
     id: globalThis.crypto.randomUUID(), mode, source, horizontal: 'cos(t)', domain: [0, 2 * Math.PI],
-    visible: true, color, style: 'solid', folder: '',
+    visible: true, initial: [1, 0], event: '', color, style: 'solid', folder: '',
   };
 }
 
@@ -79,6 +81,11 @@ function record(input: unknown): Record<string, unknown> {
 function string(input: unknown, max: number, description: string): string {
   if (typeof input !== 'string' || input.length > max) throw Error('Invalid ' + description);
   return input;
+}
+
+function pair(input: unknown): Point {
+  if (!Array.isArray(input) || input.length !== 2 || !input.every(Number.isFinite)) throw Error('Invalid coordinate pair');
+  return [input[0], input[1]];
 }
 
 export function domain(input: unknown): Domain {
@@ -115,6 +122,8 @@ export function decode(text: string): Workspace {
       source: string(c.source ?? c.expr, 8192, 'expression text'),
       horizontal: string(c.horizontal ?? 'cos(t)', 8192, 'horizontal expression'),
       domain: domain(c.domain ?? [0, 2 * Math.PI]),
+      initial: pair(c.initial ?? [1, 0]),
+      event: string(c.event ?? '', 8192, 'event expression'),
       folder: string(c.folder ?? '', 40, 'folder'),
       visible: c.visible !== false,
     };

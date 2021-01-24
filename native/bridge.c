@@ -65,6 +65,7 @@ int lc_mp_binary(struct lc_float *out, const struct lc_float *a, const struct lc
         case 1: mpfr_sub(out->value, a->value, b->value, mode(up)); break;
         case 2: mpfr_mul(out->value, a->value, b->value, mode(up)); break;
         case 3: mpfr_div(out->value, a->value, b->value, mode(up)); break;
+        case 4: mpfr_atan2(out->value, a->value, b->value, mode(up)); break;
         default: return 0;
     }
     return valid(out);

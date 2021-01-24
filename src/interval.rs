@@ -178,6 +178,36 @@ impl Interval {
         self.corners(b, Binary::Div)
     }
 
+    pub fn principal_argument(&self, real: &Self) -> Result<Self> {
+        if self.sign() == Some(Ordering::Equal) && real.sign() == Some(Ordering::Less) {
+            return Self::pi(self.bits());
+        }
+        if self.contains_zero() && real.contains_zero() {
+            return Err(Issue::Split("Complex rectangle may contain the origin"));
+        }
+        if self.low.sign().is_lt() && !self.high.sign().is_lt() && real.low.sign().is_lt() {
+            return Err(Issue::Split(
+                "Complex rectangle crosses the principal branch cut",
+            ));
+        }
+        let angle = self.corners(real, Binary::Atan2)?;
+        if real.low.sign().is_lt() && self.contains_zero() {
+            return Ok(angle.hull(&Self::pi(self.bits())?));
+        }
+        Ok(angle)
+    }
+
+    pub fn nonnegative_part(&self) -> Result<Self> {
+        if self.high.sign().is_lt() {
+            return Err(Issue::Range);
+        }
+        let zero = Float::from_f64(0.0, self.bits(), Down)?;
+        Ok(Self {
+            low: max(&zero, &self.low).clone(),
+            high: self.high.clone(),
+        })
+    }
+
     fn corners(&self, other: &Self, op: Binary) -> Result<Self> {
         let mut low = self.low.binary(&other.low, op, Down)?;
         let mut high = self.low.binary(&other.low, op, Up)?;

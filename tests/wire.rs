@@ -51,3 +51,46 @@ fn derivatives_and_improper_integrals_use_distinct_contracts() {
         "unresolved"
     );
 }
+
+#[test]
+fn principal_complex_values_keep_the_cut_convention() {
+    let log = run(json!({"op":"evaluate","expr":"log(-1+0i)"}));
+    assert_eq!(log["status"], "complex");
+    let phase = log["result"]["imaginary"]["bounds"].as_array().unwrap();
+    assert!(phase[0].as_f64().unwrap() <= std::f64::consts::PI);
+    assert!(phase[1].as_f64().unwrap() >= std::f64::consts::PI);
+    let sqrt = run(json!({"op":"evaluate","expr":"sqrt(-4+0i)"}));
+    assert_eq!(sqrt["result"]["imaginary"]["value"], "2");
+    let across = run(json!({"op":"evaluate","expr":"log(complex(-2,interval(-.1,.1)))"}));
+    assert_eq!(across["status"], "unresolved");
+    let raster = run(
+        json!({"op":"color","expr":"sqrt(z)","budget":121,"view":{"x":[-2,2],"y":[-2,2],"pixels":[200,200]}}),
+    );
+    assert_eq!(raster["status"], "approximate_coloring");
+    assert_eq!(raster["result"]["rgba"].as_array().unwrap().len(), 121 * 4);
+}
+
+#[test]
+fn ode_trajectory_and_initial_step_box_are_distinct() {
+    let orbit = run(
+        json!({"op":"ode","dx":"-y","dy":"x","initial":[1,0],"time":[0,2],
+        "event":"x","validated":true,"tolerance":1e-8}),
+    );
+    assert_eq!(orbit["status"], "approximate_trajectory");
+    let time = orbit["result"]["event"]["sample"]["t"].as_f64().unwrap();
+    assert!((time - std::f64::consts::FRAC_PI_2).abs() < 1e-6);
+    let tube = &orbit["result"]["local_box"];
+    assert!(tube["contraction_upper"].as_f64().unwrap() < 1.0);
+    let step = tube["time"][1].as_f64().unwrap();
+    let x = &tube["endpoint"][0];
+    assert!(x[0].as_f64().unwrap() < step.cos() && step.cos() < x[1].as_f64().unwrap());
+    let bad = run(
+        json!({"op":"ode","dx":"1/(x-x)","dy":"0","initial":[1,0],"time":[0,1],"tolerance":1e-6,"budget":12}),
+    );
+    assert_eq!(bad["status"], "partial");
+    assert_eq!(bad["result"]["stiffness_warning"], false);
+    let fast = run(
+        json!({"op":"ode","dx":"-x","dy":"-1000y","initial":[1,1],"time":[0,1],"tolerance":1e-7,"budget":1600}),
+    );
+    assert_eq!(fast["result"]["stiffness_warning"], true);
+}

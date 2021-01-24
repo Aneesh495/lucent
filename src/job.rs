@@ -5,7 +5,6 @@ use serde_json::{Value as Json, json};
 
 use crate::{
     calculus,
-    differentiate::inline,
     eval::{Angle, Eval, EvalError, Scope},
     exact,
     graph::{self, Context, Controls, CurveCell, CurveProblem, View},
@@ -84,6 +83,25 @@ enum Action {
         horizontal: Option<String>,
         domain: Option<[f64; 2]>,
         view: View,
+    },
+    Color {
+        expr: String,
+        view: View,
+    },
+    Ode {
+        dx: String,
+        dy: String,
+        time: [f64; 2],
+        initial: [f64; 2],
+        event: Option<String>,
+        #[serde(default)]
+        validated: bool,
+    },
+    Field {
+        dx: String,
+        dy: String,
+        view: View,
+        grid: usize,
     },
     Roots {
         expr: String,
@@ -269,6 +287,47 @@ impl Job {
                     "assumptions":["Closed-domain interval checks","Geometry has a separate numerical error model","Unresolved cells remain visible"]}),
                 )
             }
+            Action::Color { expr, view } => {
+                let raster = crate::coloring::sample(&ctx, &expression(expr)?, *view)?;
+                Ok(
+                    json!({"status":"approximate_coloring","precision":self.bits,"result":raster,
+                    "assumptions":["Pixel centers sampled","Hue tracks principal phase","Dark pixels may be zero or undefined; see sample counts"]}),
+                )
+            }
+            Action::Ode {
+                dx,
+                dy,
+                time,
+                initial,
+                event,
+                validated,
+            } => {
+                let (dx, dy) = (expression(dx)?, expression(dy)?);
+                let event = event.as_ref().map(|e| expression(e)).transpose()?;
+                let field = crate::ode::Field { dx: &dx, dy: &dy };
+                let problem = crate::ode::InitialProblem {
+                    time: *time,
+                    state: *initial,
+                    tolerance: self.tolerance,
+                    event: event.as_ref(),
+                    validated: *validated,
+                };
+                let trajectory = crate::ode::integrate(&ctx, &field, problem)?;
+                Ok(
+                    json!({"status":if trajectory.complete { "approximate_trajectory" } else { "partial" },
+                    "result":trajectory,"assumptions":["Adaptive Dormand-Prince 5(4)","Local error estimate only",
+                    "Events use sampled sign changes","Picard box, when present, covers the initial step only"]}),
+                )
+            }
+            Action::Field { dx, dy, view, grid } => {
+                let (dx, dy) = (expression(dx)?, expression(dy)?);
+                let field = crate::ode::Field { dx: &dx, dy: &dy };
+                let arrows = crate::ode::sample_field(&ctx, &field, *view, *grid)?;
+                Ok(
+                    json!({"status":"approximate_field","result":{"arrows":arrows,"view":view},
+                    "assumptions":["Cell centers sampled at t=0","Missing arrows have undefined samples"]}),
+                )
+            }
             Action::Roots { expr, domain } => {
                 let expr = equation(expr)?;
                 let result = calculus::roots(&ctx, &expr, *domain, self.tolerance)?;
@@ -283,7 +342,7 @@ impl Job {
                 domain,
                 width,
             } => {
-                let expr = inline(&equation(expr)?, &program)?;
+                let expr = equation(expr)?;
                 let result =
                     polynomial::isolate(&expr, [&domain[0], &domain[1]], width, self.budget)?;
                 Ok(
@@ -302,7 +361,7 @@ impl Job {
                 )
             }
             Action::Improper { expr, lower } => {
-                let expr = inline(&expression(expr)?, &program)?;
+                let expr = expression(expr)?;
                 let result = crate::improper::integrate(&ctx, &expr, *lower)?;
                 Ok(
                     json!({"status":if result.divergent { "divergent" } else { "improper_enclosure" },

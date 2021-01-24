@@ -6,6 +6,7 @@ mod wire;
 pub use wire::{request, verify_packet};
 
 pub mod calculus;
+pub mod coloring;
 pub mod differentiate;
 pub mod dual;
 pub mod eval;
@@ -16,6 +17,7 @@ pub mod interval;
 mod job;
 pub mod lang;
 pub mod linear;
+pub mod ode;
 pub mod polynomial;
 pub mod program;
 pub mod value;

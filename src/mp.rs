@@ -39,6 +39,7 @@ pub enum Binary {
     Sub,
     Mul,
     Div,
+    Atan2,
 }
 
 #[derive(Clone, Copy, Debug)]
