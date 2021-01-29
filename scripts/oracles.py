@@ -56,9 +56,15 @@ def numeric(row, actual):
     if status == "exact":
         expected = spec.get("exact")
         if expected is None:
-            ball = reference(spec)
-            if not ball.is_exact() or as_ball(result["value"]) != ball:
-                raise ValueError(f"Unsupported exact classification against {ball}")
+            actual = Fraction(result["value"])
+            argument = Fraction(spec["argument"])
+            if spec["function"] == "sqrt":
+                if actual < 0 or actual**2 != argument:
+                    raise ValueError("Exact square root fails the rational square identity")
+            else:
+                ball = reference(spec)
+                if not ball.is_exact() or as_ball(actual) != ball:
+                    raise ValueError(f"Unsupported exact classification against {ball}")
         elif Fraction(result["value"]) != Fraction(expected):
             raise ValueError(f"Expected {expected} and received {result['value']}")
         return {"width": 0, "useful": True}
