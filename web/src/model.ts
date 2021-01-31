@@ -2,6 +2,7 @@ export const COLORS = ['#255e50', '#3f5ca1', '#b05b36', '#875091', '#187c89', '#
 export const MODES = {
   explicit: 'Explicit y = f(x)', implicit: 'Implicit equation', region: 'Inequality region',
   parametric: 'Parametric curve', polar: 'Polar curve', scalar: 'Scalar calculation',
+  surface: 'Height surface', parametric_surface: 'Parametric surface', isosurface: 'Isosurface',
   definition: 'Definition', complex: 'Complex coloring', field: 'Vector field', ode: 'ODE trajectory',
 } as const;
 export type Mode = keyof typeof MODES;
@@ -23,6 +24,8 @@ export interface Cell {
   visible: boolean;
   initial: Point;
   event: string;
+  third: string;
+  domainV: Domain;
   color: string;
   style: 'solid' | 'dashed';
   folder: string;
@@ -43,6 +46,7 @@ export interface Workspace {
   parameters: Parameter[];
   angle: Angle;
   view: View;
+  z: Domain;
 }
 
 const STORAGE = 'lucent.workspace.v2';
@@ -54,7 +58,7 @@ export const LIMIT = 196_608;
 export function cell(source: string, mode: Mode = 'explicit', color = COLORS[0]): Cell {
   return {
     id: globalThis.crypto.randomUUID(), mode, source, horizontal: 'cos(t)', domain: [0, 2 * Math.PI],
-    visible: true, initial: [1, 0], event: '', color, style: 'solid', folder: '',
+    visible: true, initial: [1, 0], event: '', third: 'sin(v)', domainV: [0, 2 * Math.PI], color, style: 'solid', folder: '',
   };
 }
 
@@ -70,6 +74,7 @@ export function initial(): Workspace {
     parameters: [{ name: 'a', value: 1.5, min: 0.1, max: 3.5, step: 0.05 }],
     angle: 'radians',
     view: structuredClone(HOME),
+    z: [-4, 4],
   };
 }
 
@@ -124,6 +129,8 @@ export function decode(text: string): Workspace {
       domain: domain(c.domain ?? [0, 2 * Math.PI]),
       initial: pair(c.initial ?? [1, 0]),
       event: string(c.event ?? '', 8192, 'event expression'),
+      third: string(c.third ?? 'sin(v)', 8192, 'third coordinate'),
+      domainV: domain(c.domainV ?? [0, 2 * Math.PI]),
       folder: string(c.folder ?? '', 40, 'folder'),
       visible: c.visible !== false,
     };
@@ -145,7 +152,7 @@ export function decode(text: string): Workspace {
   if (angle !== 'radians' && angle !== 'degrees') throw Error('Unknown angle convention');
   const view = record(raw.view ?? HOME);
   return { version: 2, title: string(raw.title ?? 'Untitled', 80, 'title'), cells: normalized, parameters, angle,
-    view: { x: domain(view.x), y: domain(view.y) } };
+    view: { x: domain(view.x), y: domain(view.y) }, z: domain(raw.z ?? [-4, 4]) };
 }
 
 export function load(storage: Storage): { workspace: Workspace; message: string } {

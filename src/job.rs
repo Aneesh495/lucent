@@ -88,6 +88,19 @@ enum Action {
         expr: String,
         view: View,
     },
+    Surface {
+        expr: String,
+        x: Option<String>,
+        y: Option<String>,
+        parameter_domain: Option<[[f64; 2]; 2]>,
+        space: crate::spatial::Space,
+        depth: u8,
+    },
+    Isosurface {
+        expr: String,
+        space: crate::spatial::Space,
+        depth: u8,
+    },
     Ode {
         dx: String,
         dy: String,
@@ -292,6 +305,51 @@ impl Job {
                 Ok(
                     json!({"status":"approximate_coloring","precision":self.bits,"result":raster,
                     "assumptions":["Pixel centers sampled","Hue tracks principal phase","Dark pixels may be zero or undefined; see sample counts"]}),
+                )
+            }
+            Action::Surface {
+                expr,
+                x,
+                y,
+                parameter_domain,
+                space,
+                depth,
+            } => {
+                use crate::spatial::{Surface, surface};
+                let z = expression(expr)?;
+                let result =
+                    match (x, y, parameter_domain) {
+                        (Some(x), Some(y), Some(domain)) => {
+                            let x = expression(x)?;
+                            let y = expression(y)?;
+                            surface(
+                                &ctx,
+                                &Surface::Parametric([&x, &y, &z]),
+                                *domain,
+                                *space,
+                                *depth,
+                            )?
+                        }
+                        (None, None, None) => surface(
+                            &ctx,
+                            &Surface::Height(&z),
+                            [space.x, space.y],
+                            *space,
+                            *depth,
+                        )?,
+                        _ => return Err(Issue::Unsupported(
+                            "Parametric surfaces need three coordinates and two parameter ranges",
+                        )
+                        .into()),
+                    };
+                Ok(
+                    json!({"status":"approximate_mesh","result":result,"assumptions":["Interval checks preserve excluded and unresolved cells","Stencil-based mesh error","Topology is approximate"]}),
+                )
+            }
+            Action::Isosurface { expr, space, depth } => {
+                let result = crate::spatial::iso(&ctx, &equation(expr)?, *space, *depth)?;
+                Ok(
+                    json!({"status":"approximate_mesh","result":result,"assumptions":["Interval exclusion","Marching tetrahedra on retained leaf cubes","Corner signs do not certify topology"]}),
                 )
             }
             Action::Ode {

@@ -53,6 +53,7 @@
           <div class="tabs" aria-label="Workspace view">
             <button id="graph-tab" aria-pressed="true">Graph</button>
             <button id="table-tab" aria-pressed="false">Table</button>
+            <button id="spatial-tab" aria-pressed="false">3D</button>
           </div>
         </div>
         <div class="plot-toolbar">
@@ -78,6 +79,20 @@
           </div>
         </div>
         <div id="table-panel" class="table-panel" hidden></div>
+        <div id="spatial-panel" class="graph-panel spatial-panel" hidden>
+          <div id="spatial-plot" tabindex="0" role="region" aria-label="Interactive 3D mesh">
+            <canvas id="spatial-canvas" aria-hidden="true"></canvas>
+          </div>
+          <div class="spatial-range">
+            <label>z min <input id="zmin" inputmode="decimal"></label>
+            <label>z max <input id="zmax" inputmode="decimal"></label>
+          </div>
+          <div class="zoom-controls" aria-label="3D navigation">
+            <button id="spatial-in" class="button icon" aria-label="Zoom 3D in">+</button>
+            <button id="spatial-out" class="button icon" aria-label="Zoom 3D out">−</button>
+            <button id="spatial-reset" class="button icon" aria-label="Reset 3D camera">⌂</button>
+          </div>
+        </div>
         <div class="plot-foot">
           <p id="navigation-help">Drag to pan. Scroll to zoom. Focus the graph for arrow and + / − keys.</p>
           <span id="view-range">x [−8, 8]</span>

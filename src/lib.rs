@@ -20,4 +20,5 @@ pub mod linear;
 pub mod ode;
 pub mod polynomial;
 pub mod program;
+pub mod spatial;
 pub mod value;

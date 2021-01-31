@@ -58,7 +58,7 @@ test('loads a gallery example, keyboard edits, and avoids narrow overflow', asyn
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   await page.getByRole('button', { name: 'Explorations' }).click();
-  await expect(page.locator('#gallery-list button')).toHaveCount(51);
+  await expect(page.locator('#gallery-list button')).toHaveCount(55);
   await page.getByRole('button', { name: /^Repeated roots/ }).click();
   await expect(page.getByRole('textbox', { name: 'Document title' })).toHaveValue('Repeated roots');
   await settled(page);
@@ -89,4 +89,37 @@ test('imports a legacy document and reports corruption without losing the worksp
   await page.locator('#file').setInputFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from('{') });
   await expect(page.locator('#save-status')).not.toHaveText('Saved locally');
   await expect(title).toHaveValue('Migrated example');
+});
+
+test('renders a spatial exploration and supports keyboard camera controls', async ({ page }, info) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Explorations' }).click();
+  await page.getByRole('button', { name: /^Sphere isosurface/ }).click();
+  await settled(page);
+  await expect(page.getByRole('heading', { name: 'Spatial canvas' })).toBeVisible();
+  await expect(page.locator('#compute-status')).toContainText('approximate topology');
+  const host = page.getByRole('region', { name: 'Interactive 3D mesh' });
+  await host.focus();
+  const before = await page.locator('#spatial-canvas').evaluate((c: HTMLCanvasElement) => c.toDataURL());
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => page.locator('#spatial-canvas').evaluate((c: HTMLCanvasElement) => c.toDataURL())).not.toBe(before);
+  await page.screenshot({ path: info.outputPath('spatial.png') });
+  await page.getByRole('button', { name: 'Graph', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Graph canvas' })).toBeVisible();
+});
+
+test('computes real complex and ODE layers from editable gallery inputs', async ({ page }, info) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Explorations' }).click();
+  await page.getByRole('button', { name: /^The logarithm cut/ }).click();
+  await settled(page);
+  await expect(page.locator('.cell-meta').first()).toContainText('samples');
+  await page.screenshot({ path: info.outputPath('complex.png') });
+  await page.getByRole('button', { name: 'Explorations' }).click();
+  await page.getByRole('button', { name: /^Trajectory event/ }).click();
+  await settled(page);
+  await expect(page.locator('.cell-meta').first()).toContainText('event bracketed');
+  await page.getByRole('textbox', { name: 'Event residual' }).fill('x');
+  await settled(page);
+  await expect(page.locator('.cell-meta').first()).toContainText('event bracketed');
 });

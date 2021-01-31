@@ -1,11 +1,12 @@
 import { cell, COLORS, HOME, type Mode, type Parameter, type View, type Workspace } from './model';
 
-type Sketch = { source: string; mode?: Mode; horizontal?: string; domain?: [number, number]; initial?: [number, number]; event?: string };
+type Sketch = { source: string; mode?: Mode; horizontal?: string; domain?: [number, number]; initial?: [number, number]; event?: string; third?: string; domainV?: [number, number] };
 export interface Exploration {
   title: string;
   lesson: string;
   sketches: Sketch[];
   view?: View;
+  z?: [number, number];
   parameter?: Parameter;
   investigation?: { op: string; bounds: [string, string] };
 }
@@ -78,6 +79,12 @@ export const GALLERY: Exploration[] = [
     sketches: [{ source: '-1', horizontal: '1', mode: 'ode', domain: [0, 4], initial: [-1, 2], event: 'y' }], view: view([-3, 4], [-3, 4]) },
   { title: 'Fast decay in phase space', lesson: 'An explicit integrator needs smaller steps when the second component decays much faster.',
     sketches: [{ source: '-1000y', horizontal: '-x', mode: 'ode', domain: [0, 3], initial: [1, 1] }], view: view([-0.1, 1.2], [-0.1, 1.2]) },
+  one('Ripple surface', 'Rotate the mesh to compare ridge direction and height. Geometry is approximated by a sampled stencil.', 'sin(x)*cos(y)', 'surface', view([-4, 4], [-4, 4])),
+  one('Square-root surface hole', 'The disk boundary separates the valid dome from excluded corners of the input domain.', 'sqrt(4-x^2-y^2)', 'surface', view([-3, 3], [-3, 3])),
+  one('Sphere isosurface', 'The octree discards cells that cannot meet the sphere. The surviving cubes use sampled tetrahedra.', 'x^2+y^2+z^2=4', 'isosurface', view([-3, 3], [-3, 3])),
+  { title: 'Parametric torus', lesson: 'Edit one coordinate or shorten either parameter range to open the seam.',
+    sketches: [{ mode: 'parametric_surface', horizontal: '(2+.65cos(v))*cos(u)', third: '(2+.65cos(v))*sin(u)', source: '.65sin(v)' }],
+    view: view([-3, 3], [-3, 3]), z: [-3, 3] },
   one('A rational near a zero divisor', 'The quotient remains undefined when the exact rational denominator is zero.', '(1/3-0.333333333333333333)/(1/3-1/3)', 'scalar'),
 ];
 
@@ -91,10 +98,13 @@ export function loadExploration(entry: Exploration): Workspace {
       if (item.domain !== undefined) c.domain = [...item.domain];
       if (item.initial) c.initial = [...item.initial];
       if (item.event) c.event = item.event;
+      if (item.third) c.third = item.third;
+      if (item.domainV) c.domainV = [...item.domainV];
       return c;
     }),
     parameters: entry.parameter ? [{ ...entry.parameter }] : [],
     angle: 'radians',
     view: structuredClone(entry.view ?? HOME),
+    z: entry.z ? [...entry.z] : [-4, 4],
   };
 }

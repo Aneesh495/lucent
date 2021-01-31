@@ -3,6 +3,7 @@ import { Runner, type EngineResult, type EngineTask } from './engine';
 import { GALLERY, loadExploration } from './gallery';
 import { COLORS, HOME, LIMIT, MODES, History, cell, decode, domain, environment, load, save,
   type Angle, type Cell, type Mode, type Point, type View, type Workspace } from './model';
+import { SpatialCanvas, type Mesh, type SurfaceLayer } from './spatial-view';
 import { Renderer, coordinate, type Geometry, type Layer, type Raster, type Arrow } from './renderer';
 
 function id<T extends HTMLElement>(key: string): T {
@@ -24,6 +25,8 @@ const plots = new Runner();
 const analysis = new Runner();
 const tables = new Runner();
 const renderer = new Renderer(id('grid'), id('geometry'), id('overlay'));
+const spatial = new SpatialCanvas(id('spatial-canvas'), id('spatial-plot'));
+const meshes = new Map<string, { layer: SurfaceLayer; request: Record<string, unknown>; response: EngineResult }>();
 const layers = new Map<string, { layer: Layer; request: Record<string, unknown>; response: EngineResult }>();
 const diagnostics = new Map<string, HTMLElement>();
 const expressionInputs = new Map<string, HTMLInputElement>();
@@ -43,7 +46,8 @@ let activeCell = history.current.cells[0]?.id ?? '';
 let liveView = structuredClone(history.current.view);
 let showUncertainty = true;
 let selection: Point | null = null;
-let tab: 'graph' | 'table' = 'graph';
+type Tab = 'graph' | 'table' | 'spatial';
+let tab: Tab = 'graph';
 let saveTimer = 0;
 let computeTimer = 0;
 let renderFrame = 0;
@@ -56,6 +60,10 @@ saveStatus.textContent = loaded.message;
 function status(state: string, message: string): void {
   plotStatus.dataset.state = state;
   plotStatus.replaceChildren(el('span', undefined, 'indicator'), document.createTextNode(message));
+}
+
+function surfaceMode(mode: Mode): boolean {
+  return mode === 'surface' || mode === 'parametric_surface' || mode === 'isosurface';
 }
 
 function active(): Cell | undefined {
@@ -171,7 +179,7 @@ function patch(key: string, change: Partial<Cell>, rebuild = false, recompute = 
   if (!recompute) draw();
 }
 
-function inputFor(c: Cell, property: 'source' | 'horizontal' | 'event', text: string): HTMLInputElement {
+function inputFor(c: Cell, property: 'source' | 'horizontal' | 'event' | 'third', text: string): HTMLInputElement {
   const input = el('input', undefined, 'expression-input');
   input.value = c[property];
   input.maxLength = 8192;
@@ -193,6 +201,8 @@ function renderDocument(): void {
   const doc = history.current;
   title.value = doc.title;
   angle.value = doc.angle;
+  id<HTMLInputElement>('zmin').value = String(doc.z[0]);
+  id<HTMLInputElement>('zmax').value = String(doc.z[1]);
   liveView = structuredClone(doc.view);
   if (!active()) activeCell = doc.cells[0]?.id ?? '';
   diagnostics.clear();
@@ -236,8 +246,30 @@ function renderDocument(): void {
       meta.id = 'diagnostic-' + c.id;
       input.setAttribute('aria-describedby', meta.id);
       node.append(heading, input);
+      if (c.mode === 'parametric_surface') {
+        node.append(inputFor(c, 'horizontal', 'Surface x(u,v)'));
+        node.append(inputFor(c, 'third', 'Surface y(u,v)'));
+      }
       if (c.mode === 'parametric') node.append(inputFor(c, 'horizontal', 'Horizontal expression'));
       if (c.mode === 'ode' || c.mode === 'field') node.append(inputFor(c, 'horizontal', 'dx/dt expression'));
+      if (c.mode === 'parametric_surface') {
+        for (const key of ['domain', 'domainV'] as const) {
+          const range = el('div', undefined, 'cell-domain');
+          for (const i of [0, 1] as const) {
+            const label = el('label', (key === 'domain' ? 'u' : 'v') + (i === 0 ? ' min' : ' max'));
+            const value = el('input');
+            value.value = String(c[key][i]);
+            value.addEventListener('change', () => {
+              const next = [...history.current.cells.find(item => item.id === c.id)![key]];
+              next[i] = Number(value.value);
+              try { patch(c.id, { [key]: domain(next) }); } catch { value.value = String(c[key][i]); }
+            });
+            label.append(value);
+            range.append(label);
+          }
+          node.append(range);
+        }
+      }
       if (c.mode === 'parametric' || c.mode === 'polar' || c.mode === 'ode') {
         const range = el('div', undefined, 'cell-domain');
         for (const index of [0, 1] as const) {
@@ -359,6 +391,9 @@ function diagnose(key: string, response: EngineResult): void {
   } else if (kind === 'approximate_field') {
     const field = response.result as { arrows: Arrow[] };
     node.textContent = field.arrows.length + ' sampled vectors';
+  } else if (kind === 'approximate_mesh') {
+    const mesh = response.result as Mesh;
+    node.textContent = mesh.faces.length + ' triangles · ' + mesh.gaps.length + ' excluded or unresolved cells';
   } else if (kind === 'approximate_coloring') {
     const raster = response.result as Raster;
     node.textContent = raster.size.join(' × ') + ' samples · ' + raster.undefined_samples + ' undefined';
@@ -402,7 +437,7 @@ function taskFor(c: Cell, preview: boolean): EngineTask {
 let refinement = 4600;
 function compute(expected: number, preview: boolean): void {
   if (expected !== revision || tab !== 'graph') return;
-  const cells = history.current.cells.filter(c => c.visible && c.source.trim());
+  const cells = history.current.cells.filter(c => c.visible && c.source.trim() && !surfaceMode(c.mode));
   const tasks = cells.map(c => taskFor(c, preview));
   const lookup = new Map(tasks.map(task => [task.key, task.request]));
   plots.run(tasks, ({ key, response }) => {
@@ -446,14 +481,57 @@ function schedule(clear: boolean, preview = true): void {
   settled = false;
   if (clear) {
     layers.clear();
+    meshes.clear();
+    spatial.setLayers([], showUncertainty);
     selection = null;
     invalidateEvidence();
   }
   draw();
   if (tab === 'table') { computeTable(); return; }
+  if (tab === 'spatial') {
+    const current = revision;
+    status('pending', 'Meshing current expressions');
+    computeTimer = window.setTimeout(() => computeSpatial(current, preview), 22);
+    return;
+  }
   const expected = revision;
   status('pending', clear ? 'Computing current expressions' : 'Previous geometry · updating view');
   computeTimer = window.setTimeout(() => compute(expected, preview), 22);
+}
+
+function computeSpatial(expected: number, preview: boolean): void {
+  if (expected !== revision || tab !== 'spatial') return;
+  const doc = history.current;
+  const cells = doc.cells.filter(c => c.visible && c.source.trim() && surfaceMode(c.mode));
+  const space = { ...doc.view, z: doc.z };
+  const tasks: EngineTask[] = cells.map(c => ({
+    key: c.id, request: {
+      ...environment(doc), op: c.mode === 'isosurface' ? 'isosurface' : 'surface',
+      expr: c.source, space, depth: c.mode === 'isosurface' ? (preview ? 3 : 4) : (preview ? 4 : 6),
+      budget: preview ? 1700 : Math.max(4600, refinement),
+      ...(c.mode === 'parametric_surface' ? { x: c.horizontal, y: c.third, parameter_domain: [c.domain, c.domainV] } : {}),
+    },
+  }));
+  plots.run(tasks, ({ key, response }) => {
+    if (expected !== revision) return;
+    diagnose(key, response);
+    const c = cells.find(c => c.id === key)!;
+    if (response.status === 'approximate_mesh') {
+      meshes.set(key, { request: tasks.find(task => task.key === key)!.request, response,
+        layer: { color: c.color, mesh: response.result as Mesh, mapGaps: c.mode === 'surface' } });
+    } else meshes.delete(key);
+    spatial.setLayers([...meshes.values()].map(item => item.layer), showUncertainty);
+  }, () => {
+    if (expected !== revision) return;
+    if (preview && tasks.length) {
+      status('refining', 'Mesh preview · refining');
+      computeTimer = window.setTimeout(() => computeSpatial(expected, false), 55);
+    } else {
+      settled = true;
+      const count = [...meshes.values()].reduce((sum, item) => sum + item.layer.mesh.faces.length, 0);
+      status('settled', count ? count + ' triangles · approximate topology' : 'No mesh geometry');
+    }
+  }, message => status('error', message));
 }
 
 function computeTable(): void {
@@ -492,12 +570,16 @@ function computeTable(): void {
   }, () => {}, message => parent.replaceChildren(el('p', message)));
 }
 
-function switchTab(next: typeof tab): void {
+function switchTab(next: Tab): void {
   tab = next;
   id('graph-panel').hidden = next !== 'graph';
   id('table-panel').hidden = next !== 'table';
-  for (const key of ['graph', 'table'] as const) id(key + '-tab').setAttribute('aria-pressed', String(next === key));
-  id('view-title').textContent = next === 'graph' ? 'Graph canvas' : 'Sample table';
+  id('spatial-panel').hidden = next !== 'spatial';
+  for (const key of ['graph', 'table', 'spatial'] as const) id(key + '-tab').setAttribute('aria-pressed', String(next === key));
+  id('view-title').textContent = next === 'graph' ? 'Graph canvas' : next === 'table' ? 'Sample table' : 'Spatial canvas';
+  id('navigation-help').textContent = next === 'spatial'
+    ? 'Drag to rotate. Focus the mesh for arrow and + / − keys.'
+    : 'Drag to pan. Scroll to zoom. Focus the graph for arrow and + / − keys.';
   tables.cancel();
   schedule(false);
 }
@@ -543,6 +625,8 @@ function download(name: string, content: Blob | string, type = 'application/json
 }
 
 function exportData() {
+  if (tab === 'spatial') return { format: 'lucent-mesh-v1', document: history.current, camera: spatial.camera(),
+    layers: [...meshes.values()].map(({ request, response }) => ({ request, claim: response })) };
   return { format: 'lucent-plot-v1', document: history.current, viewport: liveView, uncertainty: showUncertainty,
     pixels: [renderer.width, renderer.height], layers: [...layers.values()].map(({ request, response }) => ({ request, claim: response })) };
 }
@@ -584,7 +668,7 @@ function undo(redo: boolean): void {
 }
 
 id('add').onclick = () => {
-  const added = cell('sin(x)', 'explicit', COLORS[history.current.cells.length % COLORS.length]);
+  const added = cell(tab === 'spatial' ? 'sin(x)*cos(y)' : 'sin(x)', tab === 'spatial' ? 'surface' : 'explicit', COLORS[history.current.cells.length % COLORS.length]);
   activeCell = added.id;
   update(doc => { doc.cells.push(added); }, { rebuild: true });
   expressionInputs.get(added.id)?.select();
@@ -601,6 +685,22 @@ id('save-certificate').onclick = () => {
 };
 id('graph-tab').onclick = () => switchTab('graph');
 id('table-tab').onclick = () => switchTab('table');
+id('spatial-tab').onclick = () => switchTab('spatial');
+id('spatial-in').onclick = () => spatial.zoom(1.2);
+id('spatial-out').onclick = () => spatial.zoom(1 / 1.2);
+id('spatial-reset').onclick = () => spatial.reset();
+for (const key of ['zmin', 'zmax']) {
+  id<HTMLInputElement>(key).onchange = () => {
+    const a = id<HTMLInputElement>('zmin');
+    const b = id<HTMLInputElement>('zmax');
+    try {
+      const next = domain([Number(a.value), Number(b.value)]);
+      update(doc => { doc.z = next; });
+    } catch {
+      [a.value, b.value] = history.current.z.map(String);
+    }
+  };
+}
 id('zoom-in').onclick = () => zoom(0.75);
 id('zoom-out').onclick = () => zoom(1 / 0.75);
 id('reset-view').onclick = () => viewport(HOME, true);
@@ -609,6 +709,7 @@ id('uncertainty').onclick = () => {
   showUncertainty = !showUncertainty;
   id('uncertainty').setAttribute('aria-pressed', String(showUncertainty));
   draw();
+  spatial.setLayers([...meshes.values()].map(item => item.layer), showUncertainty);
 };
 id('parameter-add').onclick = () => {
   const names = new Set(history.current.parameters.map(p => p.name));
@@ -638,6 +739,7 @@ for (const item of GALLERY) {
   button.append(el('small', item.lesson));
   button.onclick = () => {
     replace(loadExploration(item));
+    switchTab(item.sketches.some(sketch => sketch.mode && surfaceMode(sketch.mode)) ? 'spatial' : 'graph');
     if (item.investigation) {
       operation.value = item.investigation.op;
       [lower.value, upper.value] = item.investigation.bounds;
@@ -663,7 +765,9 @@ file.onchange = async () => {
 const exports = id<HTMLDialogElement>('export-dialog');
 id('export-button').onclick = () => {
   for (const button of exports.querySelectorAll<HTMLButtonElement>('[data-export]')) {
-    button.disabled = button.dataset.export !== 'document' && (!settled || tab !== 'graph' || !layers.size);
+    const kind = button.dataset.export;
+    button.disabled = kind !== 'document' && (!settled || tab === 'table'
+      || (tab === 'spatial' ? !meshes.size || kind === 'svg' : !layers.size));
   }
   exports.showModal();
 };
@@ -673,7 +777,7 @@ for (const button of exports.querySelectorAll<HTMLButtonElement>('[data-export]'
     else if (button.dataset.export === 'plot') download('lucent-plot.json', JSON.stringify(exportData()));
     else if (button.dataset.export === 'svg') download('lucent-plot.svg', renderer.svg(exportData()), 'image/svg+xml');
     else {
-      const png = await renderer.png();
+      const png = tab === 'spatial' ? await new Promise<Blob | null>(resolve => spatial.canvas.toBlob(resolve)) : await renderer.png();
       if (png) download('lucent-plot.png', png);
     }
     exports.close();
