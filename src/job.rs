@@ -88,6 +88,23 @@ enum Action {
         expr: String,
         view: View,
     },
+    Qr {
+        matrix: Vec<Vec<f64>>,
+        rhs: Option<Vec<f64>>,
+    },
+    Svd {
+        matrix: Vec<Vec<f64>>,
+    },
+    Regression {
+        expr: String,
+        degree: usize,
+    },
+    Quantile {
+        probability: String,
+    },
+    ProbabilityPlot {
+        expr: String,
+    },
     Surface {
         expr: String,
         x: Option<String>,
@@ -306,6 +323,71 @@ impl Job {
                     json!({"status":"approximate_coloring","precision":self.bits,"result":raster,
                     "assumptions":["Pixel centers sampled","Hue tracks principal phase","Dark pixels may be zero or undefined; see sample counts"]}),
                 )
+            }
+            Action::Qr { matrix, rhs } => {
+                let report = crate::floating::qr(matrix, rhs.as_deref())?;
+                Ok(
+                    json!({"status":"approximate_qr","result":report,"assumptions":["Column-pivoted Householder factorization","Rank uses a floating threshold","Residual is recomputed against the input"]}),
+                )
+            }
+            Action::Svd { matrix } => {
+                let report = crate::floating::svd(matrix)?;
+                Ok(
+                    json!({"status":if report.converged { "approximate_svd" } else { "partial" },
+                    "result":report,"assumptions":["One-sided Jacobi sweeps","Numerical rank and condition estimate"]}),
+                )
+            }
+            Action::Regression { expr, degree } => {
+                let data = ctx.evaluate(&expression(expr)?, &[])?.list()?;
+                let mut points = Vec::with_capacity(data.len());
+                for point in data {
+                    let values = point.list()?;
+                    let [x, y] = values.as_slice() else {
+                        return Err(
+                            Issue::Unsupported("Expected a list of [x,y] observations").into()
+                        );
+                    };
+                    points.push([
+                        approximate(x.clone(), self.bits)?,
+                        approximate(y.clone(), self.bits)?,
+                    ]);
+                }
+                let report = crate::floating::regress(&points, *degree)?;
+                Ok(
+                    json!({"status":if report.coefficients.is_some() { "approximate_fit" } else { "rank_deficient" },
+                    "result":report,"assumptions":["Ordinary least squares with a scaled polynomial basis",
+                    "Coefficient standard errors assume independent, equal-variance residuals"]}),
+                )
+            }
+            Action::Quantile { probability } => {
+                let probability = exact::ratio(probability)?;
+                let result = crate::statistics::normal_quantile(
+                    &probability,
+                    self.bits,
+                    self.max_bits,
+                    self.tolerance,
+                    self.budget,
+                )?;
+                Ok(
+                    json!({"status":if result.limit.is_some() { "unbounded" } else { "quantile_enclosure" },
+                    "precision":result.precision,"target_met":result.target_met,"result":result,
+                    "assumptions":["Standard normal distribution","Directed erfc in the small tail","Monotone bracket"]}),
+                )
+            }
+            Action::ProbabilityPlot { expr } => {
+                let values = ctx.evaluate(&expression(expr)?, &[])?.list()?;
+                let samples = values
+                    .into_iter()
+                    .map(|v| approximate(v, self.bits))
+                    .collect::<Result<Vec<_>>>()?;
+                let result = crate::statistics::normal_plot(
+                    samples,
+                    self.bits,
+                    self.max_bits,
+                    self.tolerance,
+                )?;
+                Ok(json!({"status":"probability_plot","result":result,
+                    "assumptions":["Blom plotting positions","Expected order statistics approximated with standard normal quantiles"]}))
             }
             Action::Surface {
                 expr,
@@ -659,6 +741,12 @@ fn curve_axes(
         }
         _ => Err(Issue::Unsupported("Mode is not a one-dimensional curve").into()),
     }
+}
+
+fn approximate(value: Value, bits: u32) -> Result<f64> {
+    let quantity = value.quantity()?;
+    let bounds = quantity.dimensionless()?.enclose(bits)?.bounds()?;
+    Ok(graph::middle(bounds))
 }
 
 fn render_value(value: &Value, bits: u32) -> std::result::Result<Json, Issue> {
