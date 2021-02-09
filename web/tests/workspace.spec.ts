@@ -58,7 +58,7 @@ test('loads a gallery example, keyboard edits, and avoids narrow overflow', asyn
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   await page.getByRole('button', { name: 'Explorations' }).click();
-  await expect(page.locator('#gallery-list button')).toHaveCount(55);
+  await expect(page.locator('#gallery-list button')).toHaveCount(58);
   await page.getByRole('button', { name: /^Repeated roots/ }).click();
   await expect(page.getByRole('textbox', { name: 'Document title' })).toHaveValue('Repeated roots');
   await settled(page);
@@ -122,4 +122,16 @@ test('computes real complex and ODE layers from editable gallery inputs', async 
   await page.getByRole('textbox', { name: 'Event residual' }).fill('x');
   await settled(page);
   await expect(page.locator('.cell-meta').first()).toContainText('event bracketed');
+});
+
+test('links editable observations to regression residuals and uncertainty', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Explorations' }).click();
+  await page.getByRole('button', { name: /^Residual pattern in a line fit/ }).click();
+  await expect(page.getByRole('heading', { name: 'Polynomial fit' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Standard error' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Residuals by input' })).toBeVisible();
+  await page.getByRole('spinbutton', { name: 'Polynomial degree' }).fill('2');
+  await page.getByRole('spinbutton', { name: 'Polynomial degree' }).press('Tab');
+  await expect(page.getByRole('table', { name: 'Estimated coefficients' }).getByRole('row')).toHaveCount(4);
 });

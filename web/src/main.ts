@@ -1,4 +1,5 @@
 import './style.css';
+import { probability, regression } from './analysis-table';
 import { Runner, type EngineResult, type EngineTask } from './engine';
 import { GALLERY, loadExploration } from './gallery';
 import { COLORS, HOME, LIMIT, MODES, History, cell, decode, domain, environment, load, save,
@@ -61,6 +62,8 @@ function status(state: string, message: string): void {
   plotStatus.dataset.state = state;
   plotStatus.replaceChildren(el('span', undefined, 'indicator'), document.createTextNode(message));
 }
+
+function dataMode(mode: Mode): boolean { return mode === 'regression' || mode === 'probability'; }
 
 function surfaceMode(mode: Mode): boolean {
   return mode === 'surface' || mode === 'parametric_surface' || mode === 'isosurface';
@@ -309,6 +312,21 @@ function renderDocument(): void {
         eventInput.placeholder = 'Optional event, e.g. x - 1';
         node.append(eventInput);
       }
+      if (c.mode === 'regression') {
+        const label = el('label', 'Polynomial degree', 'cell-domain');
+        const degree = el('input');
+        degree.type = 'number';
+        degree.min = '0';
+        degree.max = '6';
+        degree.value = String(c.degree);
+        degree.onchange = () => {
+          if (Number.isInteger(degree.valueAsNumber) && degree.valueAsNumber >= 0 && degree.valueAsNumber <= 6) {
+            patch(c.id, { degree: degree.valueAsNumber });
+          }
+        };
+        label.append(degree);
+        node.append(label);
+      }
       node.append(meta);
       const actions = el('div', undefined, 'cell-actions');
       const visible = el('input');
@@ -437,7 +455,7 @@ function taskFor(c: Cell, preview: boolean): EngineTask {
 let refinement = 4600;
 function compute(expected: number, preview: boolean): void {
   if (expected !== revision || tab !== 'graph') return;
-  const cells = history.current.cells.filter(c => c.visible && c.source.trim() && !surfaceMode(c.mode));
+  const cells = history.current.cells.filter(c => c.visible && c.source.trim() && !surfaceMode(c.mode) && !dataMode(c.mode));
   const tasks = cells.map(c => taskFor(c, preview));
   const lookup = new Map(tasks.map(task => [task.key, task.request]));
   plots.run(tasks, ({ key, response }) => {
@@ -537,9 +555,23 @@ function computeSpatial(expected: number, preview: boolean): void {
 function computeTable(): void {
   const c = active();
   const parent = id('table-panel');
+  if (c && dataMode(c.mode)) {
+    const op = c.mode === 'regression' ? 'regression' : 'probability_plot';
+    const request = { ...environment(history.current), op, expr: c.source, degree: c.degree };
+    parent.replaceChildren(el('p', 'Calculating current data…'));
+    tables.run([{ key: c.id, request }], ({ response }) => {
+      diagnose(c.id, response);
+      if (response.result) {
+        if (c.mode === 'regression') regression(parent, response.result);
+        else probability(parent, response.result);
+      } else parent.replaceChildren(el('p', response.message ?? response.status));
+      status('settled', 'Data analysis · current');
+    }, () => {}, message => parent.replaceChildren(el('p', message)));
+    return;
+  }
   if (!c || c.mode !== 'explicit') {
     tables.cancel();
-    parent.replaceChildren(el('p', 'Select an explicit function to sample it.'));
+    parent.replaceChildren(el('p', 'Select an explicit function or a data expression.'));
     return;
   }
   parent.replaceChildren(el('p', 'Sampling current expression…'));
@@ -592,9 +624,10 @@ function calculate(): void {
   const fields = op === 'evaluate' ? { bindings: { x: lower.value } }
     : op === 'derivative' ? { at: a }
     : op === 'improper' ? { lower: a }
+    : op === 'quantile' ? { probability: lower.value }
     : op === 'polynomial' ? { domain: [lower.value, upper.value] }
     : { domain: [a, b] };
-  if (op !== 'polynomial' && op !== 'evaluate' && (!Number.isFinite(a) || op !== 'derivative' && op !== 'improper' && (!Number.isFinite(b) || b <= a))) {
+  if (op !== 'polynomial' && op !== 'evaluate' && op !== 'quantile' && (!Number.isFinite(a) || op !== 'derivative' && op !== 'improper' && (!Number.isFinite(b) || b <= a))) {
     explain({ status: 'error', message: 'Enter a finite point or increasing interval.' });
     return;
   }
@@ -739,7 +772,8 @@ for (const item of GALLERY) {
   button.append(el('small', item.lesson));
   button.onclick = () => {
     replace(loadExploration(item));
-    switchTab(item.sketches.some(sketch => sketch.mode && surfaceMode(sketch.mode)) ? 'spatial' : 'graph');
+    switchTab(item.sketches.some(sketch => sketch.mode && surfaceMode(sketch.mode)) ? 'spatial'
+      : item.sketches.some(sketch => sketch.mode && dataMode(sketch.mode)) ? 'table' : 'graph');
     if (item.investigation) {
       operation.value = item.investigation.op;
       [lower.value, upper.value] = item.investigation.bounds;

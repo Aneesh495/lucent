@@ -156,3 +156,10 @@ dialog::backdrop { background: #152c2870; }
 .spatial-range { position: absolute; display: flex; gap: 7px; left: 8px; bottom: 9px; }
 .spatial-range label { font: 10px var(--mono); }
 .spatial-range input { width: 45px; padding: 3px; }
+
+.analysis-summary { margin: 6px 0 11px; color: var(--muted); font-size: 12px; }
+.analysis-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px; margin: 10px 0; }
+.analysis-chart { width: 100%; max-width: 540px; background: #fbfcf7; border: 1px solid var(--line); border-radius: 8px; }
+.analysis-chart text { fill: #425f53; font: 9px var(--mono); }
+.analysis-chart .analysis-title { font-weight: 700; font-size: 10px; }
+.table-panel table + table { margin-top: 18px; }

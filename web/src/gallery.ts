@@ -85,6 +85,12 @@ export const GALLERY: Exploration[] = [
   { title: 'Parametric torus', lesson: 'Edit one coordinate or shorten either parameter range to open the seam.',
     sketches: [{ mode: 'parametric_surface', horizontal: '(2+.65cos(v))*cos(u)', third: '(2+.65cos(v))*sin(u)', source: '.65sin(v)' }],
     view: view([-3, 3], [-3, 3]), z: [-3, 3] },
+  one('Residual pattern in a line fit', 'Compare the curved residual pattern to the fit after changing the degree to two.',
+    '[[0,1.1],[1,1.5],[2,2.7],[3,5.4],[4,8.3],[5,13.1]]', 'regression'),
+  one('Normal quantile plot', 'The last observation bends away from the theoretical order statistics.',
+    '[-2.1,-1.2,-.7,-.25,.2,.42,.92,1.6,4.7]', 'probability'),
+  one('A tiny normal tail', 'Compute a quantile using an exact tail probability without subtracting rounded doubles.',
+    'normal_sf(7)', 'scalar', HOME, inspect('quantile', '1/1000000000000', '1')),
   one('A rational near a zero divisor', 'The quotient remains undefined when the exact rational denominator is zero.', '(1/3-0.333333333333333333)/(1/3-1/3)', 'scalar'),
 ];
 

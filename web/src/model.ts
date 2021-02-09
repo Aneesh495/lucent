@@ -2,6 +2,7 @@ export const COLORS = ['#255e50', '#3f5ca1', '#b05b36', '#875091', '#187c89', '#
 export const MODES = {
   explicit: 'Explicit y = f(x)', implicit: 'Implicit equation', region: 'Inequality region',
   parametric: 'Parametric curve', polar: 'Polar curve', scalar: 'Scalar calculation',
+  regression: 'Regression data', probability: 'Normal probability data',
   surface: 'Height surface', parametric_surface: 'Parametric surface', isosurface: 'Isosurface',
   definition: 'Definition', complex: 'Complex coloring', field: 'Vector field', ode: 'ODE trajectory',
 } as const;
@@ -26,6 +27,7 @@ export interface Cell {
   event: string;
   third: string;
   domainV: Domain;
+  degree: number;
   color: string;
   style: 'solid' | 'dashed';
   folder: string;
@@ -58,7 +60,7 @@ export const LIMIT = 196_608;
 export function cell(source: string, mode: Mode = 'explicit', color = COLORS[0]): Cell {
   return {
     id: globalThis.crypto.randomUUID(), mode, source, horizontal: 'cos(t)', domain: [0, 2 * Math.PI],
-    visible: true, initial: [1, 0], event: '', third: 'sin(v)', domainV: [0, 2 * Math.PI], color, style: 'solid', folder: '',
+    visible: true, initial: [1, 0], event: '', degree: 1, third: 'sin(v)', domainV: [0, 2 * Math.PI], color, style: 'solid', folder: '',
   };
 }
 
@@ -131,6 +133,7 @@ export function decode(text: string): Workspace {
       event: string(c.event ?? '', 8192, 'event expression'),
       third: string(c.third ?? 'sin(v)', 8192, 'third coordinate'),
       domainV: domain(c.domainV ?? [0, 2 * Math.PI]),
+      degree: typeof c.degree === 'number' && Number.isInteger(c.degree) && c.degree >= 0 && c.degree <= 6 ? c.degree : 1,
       folder: string(c.folder ?? '', 40, 'folder'),
       visible: c.visible !== false,
     };
