@@ -35,6 +35,7 @@ const plot = id('plot');
 const plotStatus = id('compute-status');
 const evidence = id('evidence-result');
 const selected = id<HTMLSelectElement>('selected-cell');
+const second = id<HTMLSelectElement>('comparison');
 const angle = id<HTMLSelectElement>('angle');
 const saveStatus = id('save-status');
 const title = id<HTMLInputElement>('title');
@@ -89,6 +90,9 @@ function badge(value: string, kind = ''): HTMLElement {
 }
 
 function invalidateEvidence(): void {
+  const paired = ['intersection', 'tangency', 'area_between'].includes(operation.value);
+  second.hidden = !paired;
+  id('comparison-label').hidden = !paired;
   analysis.cancel();
   snapshot = null;
   id('save-certificate').hidden = true;
@@ -117,6 +121,9 @@ function explain(result: EngineResult): void {
         evidence.append(el('p', r.low === r.high ? r.low + ' · multiplicity ' + r.multiplicity
           : '(' + r.low + ', ' + r.high + ') · multiplicity ' + r.multiplicity));
       }
+    }
+    if (Array.isArray(p.points)) for (const point of p.points.slice(0, 10)) {
+      evidence.append(el('p', point.classification.replaceAll('_', ' ') + ' · ' + JSON.stringify(point.root.bracket)));
     }
     if (Array.isArray(p.enclosure)) evidence.append(el('p', textResult({ bounds: p.enclosure })));
     if (Array.isArray(p.panels)) evidence.append(el('p', p.panels.length + ' quadrature panels'));
@@ -195,6 +202,8 @@ function inputFor(c: Cell, property: 'source' | 'horizontal' | 'event' | 'third'
     if (property === 'source') {
       const option = [...selected.options].find(o => o.value === c.id);
       if (option) option.text = input.value || 'Empty expression';
+      const comparison = [...second.options].find(o => o.value === c.id);
+      if (comparison) comparison.text = input.value || 'Empty expression';
     }
   });
   return input;
@@ -210,7 +219,9 @@ function renderDocument(): void {
   if (!active()) activeCell = doc.cells[0]?.id ?? '';
   diagnostics.clear();
   expressionInputs.clear();
+  const prior = second.value;
   selected.replaceChildren();
+  second.replaceChildren();
   const root = id('expressions');
   root.replaceChildren();
   const folders = [...new Set(doc.cells.map(c => c.folder))];
@@ -220,6 +231,7 @@ function renderDocument(): void {
       const option = el('option', c.source || 'Empty expression');
       option.value = c.id;
       selected.append(option);
+      if (c.mode === 'explicit') second.append(option.cloneNode(true));
       const node = el('article', undefined, 'cell' + (c.id === activeCell ? ' current' : ''));
       node.dataset.cell = c.id;
       node.style.setProperty('--cell-color', c.color);
@@ -353,6 +365,8 @@ function renderDocument(): void {
     }
   }
   selected.value = activeCell;
+  second.value = [...second.options].some(option => option.value === prior)
+    ? prior : [...second.options].find(option => option.value !== activeCell)?.value ?? activeCell;
   invalidateEvidence();
   renderParameters();
   syncButtons();
@@ -631,7 +645,10 @@ function calculate(): void {
     explain({ status: 'error', message: 'Enter a finite point or increasing interval.' });
     return;
   }
-  const request = { ...environment(history.current), op, expr: c.source, ...fields, bits: 128, budget: 8192 };
+  const feature = ['intersection', 'extrema', 'tangency', 'area_between'].includes(op);
+  const other = history.current.cells.find(item => item.id === second.value);
+  const request = { ...environment(history.current), op: feature ? 'feature' : op, expr: c.source, ...fields, bits: 128, budget: 8192,
+    ...(feature ? { kind: op, other: other?.source } : {}) };
   evidence.replaceChildren(badge('pending', 'neutral'), el('p', 'Computing in a worker…'));
   setDisabled('calculate', true);
   snapshot = null;
@@ -711,7 +728,7 @@ id('redo').onclick = () => undo(true);
 title.onchange = () => update(doc => { doc.title = title.value; }, { recompute: false });
 selected.onchange = () => selectCell(selected.value);
 angle.onchange = () => update(doc => { doc.angle = angle.value as Angle; });
-operation.onchange = lower.oninput = upper.oninput = invalidateEvidence;
+operation.onchange = second.onchange = lower.oninput = upper.oninput = invalidateEvidence;
 id('calculate').onclick = calculate;
 id('save-certificate').onclick = () => {
   if (snapshot) download('lucent-certificate.json', JSON.stringify({ op: 'verify', ...snapshot }, null, 2));

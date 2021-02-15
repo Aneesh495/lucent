@@ -104,14 +104,12 @@ pub fn roots(ctx: &Context, expr: &Expr, domain: [f64; 2], tolerance: f64) -> Re
         if let Some(diff) = &symbolic {
             if let Ok((s, slope)) = root_witness(ctx, expr, diff, segment) {
                 let bracket = narrow(ctx, expr, diff, segment, s, tolerance);
-                if !out.unique.iter().any(|r| r.bracket == bracket) {
-                    out.unique.push(Root {
-                        witness: segment,
-                        bracket,
-                        endpoint_signs: s,
-                        derivative: slope.bounds()?,
-                    });
-                }
+                out.unique.push(Root {
+                    witness: segment,
+                    bracket,
+                    endpoint_signs: s,
+                    derivative: slope.bounds()?,
+                });
                 continue;
             }
         }
@@ -151,7 +149,7 @@ fn narrow(
         let newton = newton_image(ctx, expr, diff, bracket, midpoint);
         if let Ok(image) = newton {
             if image[1] - image[0] < 0.7 * (bracket[1] - bracket[0]) {
-                if image[0] == image[1] {
+                if image[0] == image[1] && signs(ctx, expr, image) == Some([0, 0]) {
                     return image;
                 }
                 if let Some(s) = signs(ctx, expr, image).filter(|s| is_bracket(*s)) {
@@ -217,6 +215,119 @@ pub fn verify_root(ctx: &Context, expr: &Expr, root: &Root) -> Result<()> {
         return Err(Issue::Unsupported("Bracket does not establish existence"));
     }
     Ok(())
+}
+
+pub fn verify_root_coverage(
+    ctx: &Context,
+    expr: &Expr,
+    domain: [f64; 2],
+    roots: &[Root],
+    excluded: &[[f64; 2]],
+    unresolved: &[[f64; 2]],
+) -> Result<()> {
+    if !valid_domain(domain)
+        || roots.len() + excluded.len() + unresolved.len() > ctx.control.budget + 64
+    {
+        return Err(Issue::Unsupported("Invalid root coverage or budget"));
+    }
+    for root in roots {
+        verify_root(ctx, expr, root)?;
+    }
+    for &cell in excluded {
+        let proven = match interval(ctx, expr, cell) {
+            Ok(bound) => !bound.contains_zero(),
+            Err(Issue::Excluded(_)) => true,
+            _ => false,
+        };
+        if !proven {
+            return Err(Issue::Unsupported(
+                "A claimed excluded root cell may contain a zero",
+            ));
+        }
+    }
+    let mut cover: Vec<_> = roots
+        .iter()
+        .map(|r| r.witness)
+        .chain(excluded.iter().copied())
+        .chain(unresolved.iter().copied())
+        .collect();
+    cover.sort_by(|a, b| a[0].total_cmp(&b[0]));
+    let mut cursor = domain[0];
+    for cell in cover {
+        if cell[0] != cursor || cell[0] >= cell[1] {
+            return Err(Issue::Unsupported(
+                "Root coverage has a gap, overlap or reversed interval",
+            ));
+        }
+        cursor = cell[1];
+    }
+    if cursor != domain[1] {
+        return Err(Issue::Unsupported("Root coverage is incomplete"));
+    }
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+pub struct StationaryPoint {
+    pub root: Root,
+    pub classification: &'static str,
+    pub residual: Option<[f64; 2]>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Stationary {
+    pub points: Vec<StationaryPoint>,
+    pub unresolved: Vec<[f64; 2]>,
+}
+
+pub fn stationary(
+    ctx: &Context,
+    expr: &Expr,
+    domain: [f64; 2],
+    tolerance: f64,
+    tangent: bool,
+) -> Result<(Expr, Stationary)> {
+    let differential = first_derivative(ctx, expr)?;
+    let candidates = roots(ctx, &differential, domain, tolerance)?;
+    let mut result = Stationary {
+        points: Vec::new(),
+        unresolved: candidates.unresolved,
+    };
+    for root in candidates.unique {
+        if root.bracket[0] == root.bracket[1] && domain.contains(&root.bracket[0]) {
+            continue;
+        }
+        let original = interval(ctx, expr, root.witness);
+        let residual = interval(ctx, expr, root.bracket);
+        if original.is_err() || residual.is_err() {
+            result.unresolved.push(root.bracket);
+            continue;
+        }
+        let residual = residual?;
+        if tangent {
+            if residual.sign() == Some(Ordering::Equal) {
+                result.points.push(StationaryPoint {
+                    root,
+                    classification: "tangency",
+                    residual: Some(residual.bounds()?),
+                });
+            } else if residual.contains_zero() {
+                result.unresolved.push(root.bracket);
+            }
+        } else {
+            let classification = if root.derivative[0] > 0.0 {
+                "local_minimum"
+            } else {
+                "local_maximum"
+            };
+            result.points.push(StationaryPoint {
+                root,
+                classification,
+                residual: Some(residual.bounds()?),
+            });
+        }
+    }
+    Ok((differential, result))
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]

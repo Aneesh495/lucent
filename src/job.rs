@@ -65,6 +65,15 @@ enum Mode {
 }
 
 #[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum Feature {
+    Intersection,
+    Extrema,
+    Tangency,
+    AreaBetween,
+}
+
+#[derive(Deserialize, Serialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 enum Action {
     Evaluate {
@@ -132,6 +141,12 @@ enum Action {
         dy: String,
         view: View,
         grid: usize,
+    },
+    Feature {
+        kind: Feature,
+        expr: String,
+        other: Option<String>,
+        domain: [f64; 2],
     },
     Roots {
         expr: String,
@@ -468,6 +483,60 @@ impl Job {
                     "assumptions":["Cell centers sampled at t=0","Missing arrows have undefined samples"]}),
                 )
             }
+            Action::Feature {
+                kind,
+                expr,
+                other,
+                domain,
+            } => {
+                let left = expression(expr)?;
+                let residual = match kind {
+                    Feature::Extrema => left,
+                    _ => {
+                        let right = expression(
+                            other
+                                .as_deref()
+                                .ok_or(Issue::Unsupported("Select a second expression"))?,
+                        )?;
+                        let span = left.span;
+                        Expr::binary(Op::Sub, left, right, span)
+                    }
+                };
+                let bits = self.bits;
+                match kind {
+                    Feature::Intersection => {
+                        let result = calculus::roots(&ctx, &residual, *domain, self.tolerance)?;
+                        Ok(
+                            json!({"status":if result.unresolved.is_empty() {"root_certificate"} else {"partial"},
+                            "equation":residual.to_string(),"result":result,"precision":bits}),
+                        )
+                    }
+                    Feature::Extrema | Feature::Tangency => {
+                        let tangent = matches!(kind, Feature::Tangency);
+                        let (stationary, result) = calculus::stationary(
+                            &ctx,
+                            &residual,
+                            *domain,
+                            self.tolerance,
+                            tangent,
+                        )?;
+                        Ok(
+                            json!({"status":if result.unresolved.is_empty() {"stationary_witnesses"} else {"partial"},
+                            "equation":stationary.to_string() + " = 0","result":result,"precision":bits,
+                            "assumptions":["Interior stationary points from a nonzero second-derivative witness","Tangency also requires an exact-zero residual"]}),
+                        )
+                    }
+                    Feature::AreaBetween => {
+                        let span = residual.span;
+                        let absolute = Expr::new(Kind::Call("abs".into(), vec![residual]), span);
+                        let result = calculus::integrate(&ctx, &absolute, *domain, self.tolerance)?;
+                        Ok(
+                            json!({"status":if result.enclosure.is_some() {"integral_certificate"} else {"unresolved"},
+                            "equation":absolute.to_string(),"result":result,"precision":bits}),
+                        )
+                    }
+                }
+            }
             Action::Roots { expr, domain } => {
                 let expr = equation(expr)?;
                 let result = calculus::roots(&ctx, &expr, *domain, self.tolerance)?;
@@ -649,18 +718,30 @@ impl Job {
             Action::Roots { expr, domain } => {
                 let roots = serde_json::from_value::<Vec<calculus::Root>>(result["unique"].clone())
                     .map_err(|_| Issue::Unsupported("Invalid root claim"))?;
-                if roots.is_empty() || roots.len() > control.budget {
-                    return Err(Issue::Unsupported("Missing or excessive root witnesses").into());
+                let excluded = serde_json::from_value::<Vec<[f64; 2]>>(result["excluded"].clone())
+                    .map_err(|_| Issue::Unsupported("Invalid root exclusion coverage"))?;
+                let unresolved =
+                    serde_json::from_value::<Vec<[f64; 2]>>(result["unresolved"].clone())
+                        .map_err(|_| Issue::Unsupported("Invalid unresolved coverage"))?;
+                let status = if unresolved.is_empty() {
+                    "root_certificate"
+                } else {
+                    "partial"
+                };
+                if claim["status"] != status {
+                    return Err(Issue::Unsupported(
+                        "Root completion claim disagrees with coverage",
+                    )
+                    .into());
                 }
-                let expr = equation(expr)?;
-                for root in &roots {
-                    if root.witness[0] < domain[0] || root.witness[1] > domain[1] {
-                        return Err(
-                            Issue::Unsupported("Root witness outside requested domain").into()
-                        );
-                    }
-                    calculus::verify_root(&ctx, &expr, root)?;
-                }
+                calculus::verify_root_coverage(
+                    &ctx,
+                    &equation(expr)?,
+                    *domain,
+                    &roots,
+                    &excluded,
+                    &unresolved,
+                )?;
             }
             Action::Integral { expr, domain } => {
                 let enclosure = serde_json::from_value::<[f64; 2]>(result["enclosure"].clone())
@@ -689,6 +770,23 @@ impl Job {
                 let cells = serde_json::from_value::<Vec<CurveCell>>(result["cells"].clone())
                     .map_err(|_| Issue::Unsupported("Malformed curve coverage"))?;
                 verify_curve(&ctx, &problem, &cells)?;
+                if self.execute()? != claim {
+                    return Err(Issue::Unsupported(
+                        "Curve replay disagrees with the saved coverage or error model",
+                    )
+                    .into());
+                }
+            }
+            Action::Graph { .. }
+            | Action::Polynomial { .. }
+            | Action::Improper { .. }
+            | Action::Feature { .. }
+            | Action::Quantile { .. } => {
+                if self.execute()? != claim {
+                    return Err(
+                        Issue::Unsupported("Replayed evidence differs from the claim").into(),
+                    );
+                }
             }
             _ => {
                 return Err(
@@ -746,6 +844,13 @@ fn curve_axes(
 fn approximate(value: Value, bits: u32) -> Result<f64> {
     let quantity = value.quantity()?;
     let bounds = quantity.dimensionless()?.enclose(bits)?.bounds()?;
+    let scale = bounds[0].abs().max(bounds[1].abs()).max(1.0);
+    if bounds[1] - bounds[0] > 1e-12 * scale {
+        return Err(Issue::Unsupported(
+            "A data value has a wide enclosure; give a point observation",
+        )
+        .into());
+    }
     Ok(graph::middle(bounds))
 }
 

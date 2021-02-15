@@ -110,9 +110,11 @@
           <label for="operation">Operation</label>
           <select id="operation">
             <option value="evaluate">Evaluate scalar</option><option value="enclose">Enclose on an interval</option>
-            <option value="roots">Isolate regular roots</option><option value="polynomial">Count polynomial roots</option>
+            <option value="roots">Isolate regular roots</option><option value="intersection">Intersect two functions</option><option value="extrema">Locate stationary extrema</option><option value="tangency">Find tangencies</option><option value="area_between">Area between functions</option><option value="polynomial">Count polynomial roots</option>
             <option value="integral">Integrate on an interval</option><option value="improper">Integrate to infinity</option><option value="derivative">Compare derivatives</option><option value="quantile">Normal quantile (p at left)</option>
           </select>
+          <label for="comparison" id="comparison-label" hidden>Second expression</label>
+          <select id="comparison" hidden></select>
           <div class="domain-inputs">
             <label for="lower">Lower / x <input id="lower" value="0" inputmode="decimal"></label>
             <label for="upper">Upper <input id="upper" value="1" inputmode="decimal"></label>

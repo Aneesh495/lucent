@@ -94,3 +94,50 @@ fn ode_trajectory_and_initial_step_box_are_distinct() {
     );
     assert_eq!(fast["result"]["stiffness_warning"], true);
 }
+
+#[test]
+fn feature_tools_expose_solved_equations_and_tangency_evidence() {
+    let intersection =
+        run(json!({"op":"feature","kind":"intersection","expr":"x^2","other":"2","domain":[1,2]}));
+    assert_eq!(intersection["equation"], "((x ^ 2) - 2)");
+    assert_eq!(
+        intersection["result"]["unique"].as_array().unwrap().len(),
+        1
+    );
+    let tangent =
+        run(json!({"op":"feature","kind":"tangency","expr":"x^2","other":"0","domain":[-1,1]}));
+    assert_eq!(tangent["result"]["points"][0]["classification"], "tangency");
+    assert_eq!(
+        tangent["result"]["points"][0]["root"]["bracket"],
+        json!([0.0, 0.0])
+    );
+    let no_tangent =
+        run(json!({"op":"feature","kind":"tangency","expr":"x^2+1","other":"0","domain":[-1,1]}));
+    assert!(
+        no_tangent["result"]["points"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    let area =
+        run(json!({"op":"feature","kind":"area_between","expr":"3","other":"x","domain":[0,1]}));
+    let bounds = area["result"]["enclosure"].as_array().unwrap();
+    let lo = bounds[0].as_f64().unwrap();
+    let hi = bounds[1].as_f64().unwrap();
+    assert!(lo <= 2.5 && 2.5 <= hi && hi - lo <= 1e-12);
+}
+
+#[test]
+fn root_verifier_rejects_omitted_coverage() {
+    let request = json!({"op":"roots","expr":"x^2-2","domain":[-3,3]});
+    let mut claim = run(request.clone());
+    assert_eq!(
+        run(json!({"op":"verify","request":request,"claim":claim}))["status"],
+        "verified"
+    );
+    claim["result"]["unique"].as_array_mut().unwrap().pop();
+    assert_eq!(
+        run(json!({"op":"verify","request":request,"claim":claim}))["status"],
+        "rejected"
+    );
+}
