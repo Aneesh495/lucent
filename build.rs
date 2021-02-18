@@ -1,6 +1,7 @@
 fn main() {
     println!("cargo:rerun-if-changed=native/bridge.c");
     println!("cargo:rerun-if-env-changed=LUCENT_MPFR_PREFIX");
+    println!("cargo:rerun-if-env-changed=LUCENT_MPFR_NATIVE");
     let mut bridge = cc::Build::new();
     bridge.file("native/bridge.c").flag_if_supported("-std=c11");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("emscripten") {
@@ -11,6 +12,18 @@ fn main() {
         bridge
             .include(prefix.join("include"))
             .compile("lucent_mpfr");
+    } else if let Some(prefix) = std::env::var_os("LUCENT_MPFR_NATIVE") {
+        let prefix = std::path::PathBuf::from(prefix);
+        bridge
+            .include(prefix.join("include"))
+            .compile("lucent_mpfr");
+        println!(
+            "cargo:rustc-link-search=native={}",
+            prefix.join("lib").display()
+        );
+        println!("cargo:rustc-link-lib=static=mpfr");
+        println!("cargo:rustc-link-lib=static=gmp");
+        println!("cargo:rustc-link-lib=m");
     } else {
         let mpfr = pkg_config::Config::new()
             .cargo_metadata(false)

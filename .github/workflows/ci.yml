@@ -1,0 +1,44 @@
+name: Validate
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.21.0
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Native and cross-compile prerequisites
+        run: sudo apt-get update && sudo apt-get install -y m4 pkg-config xz-utils graphviz
+      - name: Build pinned arithmetic libraries
+        run: |
+          make bootstrap-native bootstrap-wasm
+          echo "LUCENT_MPFR_NATIVE=$PWD/.agent-local/toolchain/native" >> "$GITHUB_ENV"
+      - name: Static checks and native integration
+        run: |
+          cargo fmt --check
+          cargo clippy --locked --all-targets -- -D warnings
+          make test certificate-check parity data
+      - name: Production browser build and interactions
+        run: |
+          npm --prefix web ci
+          cd web && npx playwright install --with-deps chromium --only-shell && cd ..
+          make browser-test
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: browser-checks
+          path: web/test-results/
+          retention-days: 7

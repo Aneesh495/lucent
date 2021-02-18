@@ -61,5 +61,18 @@ numeric-corpus: build wasm
 graph-corpus: build wasm
 	$(ORACLE_PYTHON) scripts/campaign.py --run-id "$(RUN_ID)" --profile subset --suites graph
 
-acceptance: build wasm
+acceptance: build web
 	$(ORACLE_PYTHON) scripts/campaign.py --run-id "$(RUN_ID)" --profile "$(PROFILE)"
+
+.PHONY: bootstrap-native
+bootstrap-native:
+	bash scripts/bootstrap-native.sh
+
+.PHONY: pages
+pages:
+	bash scripts/package-pages.sh /lucent/
+
+.PHONY: verify
+verify: build
+	@test -n "$(EVIDENCE)" || { echo 'Set EVIDENCE to a campaign directory'; exit 2; }
+	$(ORACLE_PYTHON) scripts/verify-evidence.py "$(EVIDENCE)" $(if $(EXPECTED_COMMIT),--expected-commit "$(EXPECTED_COMMIT)")

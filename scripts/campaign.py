@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Execute and retain the frozen diagnostic workload and command records."""
 import argparse
+import resource
+from contextlib import ExitStack
 from hashlib import sha256
 import gzip
 import json
@@ -15,8 +17,9 @@ import time
 from workloads import COUNTS, compact, materialize
 
 ROOT = Path(__file__).resolve().parents[1]
-BACKENDS = {"native": ["target/release/lucent"], "wasm": ["node", "scripts/batch-wasm.mjs"]}
-REMAINING = ["G02 actual browser full corpus", "G06 broad independent polynomial oracle", "G08 complex, 3D and ODE acceptance",
+BACKENDS = {"native": ["target/release/lucent"], "wasm": ["node", "scripts/batch-wasm.mjs"],
+            "browser": ["node", "scripts/batch-browser.mjs"]}
+REMAINING = ["G06 broad independent polynomial oracle", "G08 complex, 3D and ODE acceptance",
              "G09 pinned-device interaction benchmarks", "G10 p95 cancellation measurements", "G12 comprehensive accessibility",
              "G13 independent reconstruction of all exports", "G15 complete reproduction", "G16 release acceptance"]
 
@@ -44,6 +47,7 @@ def sources():
 
 def record(path, argv, inp=None, out=None, *, timeout=1800):
     started = time.monotonic()
+    before = resource.getrusage(resource.RUSAGE_CHILDREN)
     with (inp.open("rb") if inp else open("/dev/null", "rb")) as stdin, \
             (out.open("wb") if out else (path / "console.log").open("ab")) as stdout, \
             (path / "stderr.log").open("ab") as stderr:
@@ -53,6 +57,11 @@ def record(path, argv, inp=None, out=None, *, timeout=1800):
         except subprocess.TimeoutExpired:
             code = 124
     info = {"argv": argv, "exit": code, "elapsed_seconds": time.monotonic() - started}
+    after = resource.getrusage(resource.RUSAGE_CHILDREN)
+    with (path / "RESOURCES.jsonl").open("a") as stream:
+        print(compact({"argv": argv, "child_user_seconds": after.ru_utime - before.ru_utime,
+            "child_system_seconds": after.ru_stime - before.ru_stime,
+            "maximum_child_rss_bytes_seen": after.ru_maxrss * (1 if sys.platform == "darwin" else 1024)}), file=stream)
     if inp is not None:
         info["input"] = str(inp.relative_to(path))
     if out is not None:
@@ -72,8 +81,11 @@ def observe(path, suite, fixture, outputs):
     regular = 0
     maximum = 0
     count = 0
-    with fixture.open() as cases, outputs["native"].open() as native, outputs["wasm"].open() as wasm, outcomes.open("w") as dest:
-        for case, first, second in zip(cases, native, wasm, strict=True):
+    with ExitStack() as stack:
+        cases = stack.enter_context(fixture.open())
+        streams = [stack.enter_context(file.open()) for file in outputs.values()]
+        dest = stack.enter_context(outcomes.open("w"))
+        for case, first, second, *other in zip(cases, *streams, strict=True):
             row = json.loads(case)
             report = {"id": row["id"], "status": "passed"}
             try:
@@ -81,9 +93,12 @@ def observe(path, suite, fixture, outputs):
                 if suite != "graph" and first != second:
                     raise ValueError("Serialized native and WASM results differ")
                 observed = check(row, a)
-                wasm_observed = check(row, b)
-                if suite == "graph" and observed != wasm_observed:
-                    raise ValueError("Native and WASM geometry observations differ")
+                for alternate in [b, *(json.loads(item) for item in other)]:
+                    alternate_observed = check(row, alternate)
+                    if observed != alternate_observed:
+                        raise ValueError("Native and alternate-backend observations differ")
+                    if suite != "graph" and a != alternate:
+                        raise ValueError("Native and browser numerical results differ")
                 report.update(observed)
                 if "useful" in observed:
                     useful += int(observed["useful"])
@@ -139,7 +154,9 @@ def run(args):
                 for line in src:
                     print(compact(json.loads(line)["request"]), file=dest)
             outputs = {}
-            for backend, argv in BACKENDS.items():
+            engines = list(BACKENDS) if args.profile != "subset" else ["native", "wasm"]
+            for backend in engines:
+                argv = BACKENDS[backend]
                 outputs[backend] = path / f"{suite}-{backend}.jsonl"
                 record(path, argv, inputs, outputs[backend])
             result = observe(path, suite, fixture, outputs)
