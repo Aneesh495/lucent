@@ -42,6 +42,7 @@ python3 - <<'PY'
 from pathlib import Path
 path = Path("web/dist/index.html")
 value = path.read_text()
-where = value.index("</header>")
+anchor = '</aside>'
+where = value.index(anchor)
 path.write_text(value[:where] + '<a class="button quiet" href="licenses/index.html">Engine sources</a>\n' + value[where:])
 PY

@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { crc32 } from 'node:zlib';
 import { test, expect, type Page } from '@playwright/test';
 
 async function settled(page: Page) {
@@ -134,4 +136,36 @@ test('links editable observations to regression residuals and uncertainty', asyn
   await page.getByRole('spinbutton', { name: 'Polynomial degree' }).fill('2');
   await page.getByRole('spinbutton', { name: 'Polynomial degree' }).press('Tab');
   await expect(page.getByRole('table', { name: 'Estimated coefficients' }).getByRole('row')).toHaveCount(4);
+});
+
+test('reconstructs exported geometry metadata from JSON, SVG and PNG', async ({ page }) => {
+  await page.goto('/');
+  await settled(page);
+  const exportFile = async (label: string) => {
+    await page.getByRole('button', { name: 'Export', exact: false }).click();
+    const pending = page.waitForEvent('download');
+    await page.getByRole('button', { name: label, exact: true }).click();
+    return await readFile((await (await pending).path())!);
+  };
+  const json = JSON.parse((await exportFile('Plot data JSON')).toString());
+  expect(json.layers.length).toBe(3);
+  expect(json.layers[1].claim.result.cells.some((cell: { kind: string }) => cell.kind === 'unresolved')).toBe(true);
+  const svg = (await exportFile('Plot SVG')).toString();
+  const fromSvg = await page.evaluate(svg => {
+    const parsed = new DOMParser().parseFromString(svg, 'image/svg+xml');
+    return JSON.parse(parsed.querySelector('metadata')!.textContent!);
+  }, svg);
+  expect(fromSvg).toEqual(json);
+  const png = await exportFile('Plot PNG');
+  expect(png.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+  let text = '';
+  for (let offset = 8; offset < png.length; ) {
+    const length = png.readUInt32BE(offset);
+    const data = png.subarray(offset + 8, offset + 8 + length);
+    const tag = png.subarray(offset + 4, offset + 8);
+    expect(crc32(Buffer.concat([tag, data]))).toBe(png.readUInt32BE(offset + 8 + length));
+    if (tag.toString() === 'iTXt' && data.subarray(0, 7).toString() === 'Lucent\0') text = data.subarray(11).toString();
+    offset += length + 12;
+  }
+  expect(JSON.parse(text)).toEqual(json);
 });

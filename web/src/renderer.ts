@@ -405,13 +405,15 @@ export class Renderer {
     const raster = picture && this.rasterCanvas
       ? `<image x="${picture[0]}" y="${picture[1]}" width="${picture[2]}" height="${picture[3]}" preserveAspectRatio="none" href="${this.rasterCanvas.toDataURL()}"/>`
       : '';
-    const rects = this.rects.map(r => `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${r.fill}"/>`);
+    const rects = this.rects.map(r => `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${r.fill}"/>${r.hatch ? `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="url(#uncertainty)"/>` : ''}`);
     const axes = this.labels().map(t => t.vertical
-      ? `<path d="M${t.x} 0V${height}"/><text x="${t.x + 3}" y="${height - 22}">${t.text}</text>`
-      : `<path d="M0 ${t.y}H${width}"/><text x="5" y="${t.y - 3}">${t.text}</text>`);
+      ? `<path d="M${t.x} 0V${height}"/><text fill="#54655e" stroke="none" x="${t.x + 3}" y="${height - 22}">${t.text}</text>`
+      : `<path d="M0 ${t.y}H${width}"/><text fill="#54655e" stroke="none" x="5" y="${t.y - 3}">${t.text}</text>`);
     const lines = this.lines.map(l => `<path d="M${l.a.join(' ')}L${l.b.join(' ')}" fill="none" stroke="${l.color}" stroke-width="2"${l.dashed ? ' stroke-dasharray="6 4"' : ''}/>`);
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
       <title>Lucent plot</title><metadata>${esc(JSON.stringify(metadata))}</metadata>
+      <defs><pattern id="uncertainty" width="8" height="8" patternUnits="userSpaceOnUse">
+      <path d="M-4 4L4 -4M0 8L8 0M4 12L12 4" stroke="#956036" opacity=".25"/></pattern></defs>
       <rect width="100%" height="100%" fill="#fcfdf8"/>${raster}${rects.join('')}
       <g stroke="#dde5dc" font-size="10" font-family="monospace">${axes.join('')}</g>${lines.join('')}</svg>`;
   }

@@ -4,6 +4,7 @@ import { Runner, type EngineResult, type EngineTask } from './engine';
 import { GALLERY, loadExploration } from './gallery';
 import { COLORS, HOME, LIMIT, MODES, History, cell, decode, domain, environment, load, save,
   type Angle, type Cell, type Mode, type Point, type View, type Workspace } from './model';
+import { annotatePng } from './png';
 import { SpatialCanvas, type Mesh, type SurfaceLayer } from './spatial-view';
 import { Renderer, coordinate, type Geometry, type Layer, type Raster, type Arrow } from './renderer';
 
@@ -829,7 +830,10 @@ for (const button of exports.querySelectorAll<HTMLButtonElement>('[data-export]'
     else if (button.dataset.export === 'svg') download('lucent-plot.svg', renderer.svg(exportData()), 'image/svg+xml');
     else {
       const png = tab === 'spatial' ? await new Promise<Blob | null>(resolve => spatial.canvas.toBlob(resolve)) : await renderer.png();
-      if (png) download('lucent-plot.png', png);
+      if (png) {
+        try { download('lucent-plot.png', await annotatePng(png, exportData())); }
+        catch (error) { saveStatus.textContent = error instanceof Error ? error.message : 'PNG export failed'; }
+      }
     }
     exports.close();
   };

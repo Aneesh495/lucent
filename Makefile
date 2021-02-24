@@ -76,3 +76,7 @@ pages:
 verify: build
 	@test -n "$(EVIDENCE)" || { echo 'Set EVIDENCE to a campaign directory'; exit 2; }
 	$(ORACLE_PYTHON) scripts/verify-evidence.py "$(EVIDENCE)" $(if $(EXPECTED_COMMIT),--expected-commit "$(EXPECTED_COMMIT)")
+
+.PHONY: stress
+stress:
+	node scripts/workspace-stress.mjs

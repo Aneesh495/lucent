@@ -190,7 +190,9 @@ export class History {
   private undoStack: Workspace[] = [];
   private redoStack: Workspace[] = [];
 
-  constructor(public current: Workspace) {}
+  current: Workspace;
+
+  constructor(workspace: Workspace) { this.current = workspace; }
 
   get canUndo(): boolean { return this.undoStack.length > 0; }
   get canRedo(): boolean { return this.redoStack.length > 0; }
