@@ -141,3 +141,16 @@ fn root_verifier_rejects_omitted_coverage() {
         "rejected"
     );
 }
+
+#[test]
+fn coordinate_cancellation_keeps_domain_guards() {
+    let simple = run(json!({"op":"simplify","expr":"x/x+if(true, 1/3+.2, 1/0)"}));
+    let source = simple["equation"].as_str().unwrap();
+    assert!(source.contains("self_quotient(x)"));
+    let enclosure = run(json!({"op":"enclose","expr":source,"domain":[-1,1]}));
+    assert_eq!(enclosure["status"], "unresolved");
+    let positive = run(json!({"op":"enclose","expr":source,"domain":[1,2]}));
+    assert_eq!(positive["result"]["value"], "23/15");
+    let independent = run(json!({"op":"simplify","expr":"interval(1,2)-interval(1,2)"}));
+    assert_eq!(independent["result"]["guarded_identities"], 0);
+}

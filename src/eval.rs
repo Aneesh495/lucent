@@ -189,6 +189,46 @@ impl<'a> Eval<'a> {
     fn call(&self, name: &str, mut args: Vec<Value>) -> NumericResult<Value> {
         let bits = self.bits;
         match name {
+            "self_quotient" | "self_difference" if args.len() == 1 => {
+                let value = args.remove(0);
+                let quotient = name == "self_quotient";
+                let nonzero = |value: &Real| value.sign().is_some_and(|s| !s.is_eq());
+                match value {
+                    Value::Quantity(q) => {
+                        if !quotient {
+                            return Ok(Value::Quantity(Quantity::new(
+                                Real::integer(0),
+                                q.dimension,
+                            )));
+                        }
+                        if q.real.is_zero() {
+                            return Err(Issue::Excluded("Denominator is zero"));
+                        }
+                        if !nonzero(&q.real) {
+                            return Err(Issue::Split("Denominator enclosure includes zero"));
+                        }
+                        Ok(Value::real(Real::integer(1)))
+                    }
+                    Value::Complex(re, im) => {
+                        if quotient && !nonzero(&re) && !nonzero(&im) {
+                            return if re.is_zero() && im.is_zero() {
+                                Err(Issue::Excluded("Complex denominator is zero"))
+                            } else {
+                                Err(Issue::Split(
+                                    "Complex denominator rectangle may contain zero",
+                                ))
+                            };
+                        }
+                        Ok(Value::Complex(
+                            Real::integer(i64::from(quotient)),
+                            Real::integer(0),
+                        ))
+                    }
+                    _ => Err(Issue::Unsupported(
+                        "A scalar is required for this guarded identity",
+                    )),
+                }
+            }
             "sum" | "product" if args.len() == 1 => {
                 let (op, initial) = if name == "sum" {
                     (Op::Add, 0)

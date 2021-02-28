@@ -166,7 +166,10 @@ export function load(storage: Storage): { workspace: Workspace; message: string 
       return { workspace: decode(primary), message: 'Restored local document' };
     } catch {
       const backup = storage.getItem(BACKUP);
-      if (backup) return { workspace: decode(backup), message: 'Recovered the last valid autosave' };
+      if (backup) {
+        try { return { workspace: decode(backup), message: 'Recovered the last valid autosave' }; }
+        catch { /* Both document copies are unreadable. */ }
+      }
     }
     return { workspace: initial(), message: 'Autosave unreadable. Opened a new document.' };
   } catch {

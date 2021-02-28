@@ -570,6 +570,7 @@ function computeSpatial(expected: number, preview: boolean): void {
 function computeTable(): void {
   const c = active();
   const parent = id('table-panel');
+  status('pending', 'Computing current table');
   if (c && dataMode(c.mode)) {
     const op = c.mode === 'regression' ? 'regression' : 'probability_plot';
     const request = { ...environment(history.current), op, expr: c.source, degree: c.degree };
@@ -581,12 +582,13 @@ function computeTable(): void {
         else probability(parent, response.result);
       } else parent.replaceChildren(el('p', response.message ?? response.status));
       status('settled', 'Data analysis · current');
-    }, () => {}, message => parent.replaceChildren(el('p', message)));
+    }, () => {}, message => { parent.replaceChildren(el('p', message)); status('error', message); });
     return;
   }
   if (!c || c.mode !== 'explicit') {
     tables.cancel();
     parent.replaceChildren(el('p', 'Select an explicit function or a data expression.'));
+    status('settled', 'No expression selected for table');
     return;
   }
   parent.replaceChildren(el('p', 'Sampling current expression…'));
@@ -594,7 +596,11 @@ function computeTable(): void {
   const samples = Array.from({ length: 17 }, (_, i) => x[0] + (x[1] - x[0]) * i / 16);
   const request = { ...environment(history.current), op: 'table', expr: c.source, samples };
   tables.run([{ key: c.id, request }], ({ response }) => {
-    if (!Array.isArray(response.result)) { parent.replaceChildren(el('p', response.message ?? response.status)); return; }
+    if (!Array.isArray(response.result)) {
+      parent.replaceChildren(el('p', response.message ?? response.status));
+      status('settled', 'Table request returned ' + response.status);
+      return;
+    }
     const table = el('table');
     const caption = el('caption', c.source);
     const header = el('tr');
@@ -614,7 +620,7 @@ function computeTable(): void {
     table.append(caption, head, rows);
     parent.replaceChildren(table);
     status('settled', 'Sample table · current');
-  }, () => {}, message => parent.replaceChildren(el('p', message)));
+  }, () => {}, message => { parent.replaceChildren(el('p', message)); status('error', message); });
 }
 
 function switchTab(next: Tab): void {
@@ -642,7 +648,7 @@ function calculate(): void {
     : op === 'quantile' ? { probability: lower.value }
     : op === 'polynomial' ? { domain: [lower.value, upper.value] }
     : { domain: [a, b] };
-  if (op !== 'polynomial' && op !== 'evaluate' && op !== 'quantile' && (!Number.isFinite(a) || op !== 'derivative' && op !== 'improper' && (!Number.isFinite(b) || b <= a))) {
+  if (op !== 'polynomial' && op !== 'evaluate' && op !== 'quantile' && op !== 'simplify' && (!Number.isFinite(a) || op !== 'derivative' && op !== 'improper' && (!Number.isFinite(b) || b <= a))) {
     explain({ status: 'error', message: 'Enter a finite point or increasing interval.' });
     return;
   }

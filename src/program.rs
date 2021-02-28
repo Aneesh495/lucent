@@ -52,6 +52,8 @@ pub fn builtin(name: &str) -> bool {
             | "solve"
             | "normal_cdf"
             | "normal_sf"
+            | "self_quotient"
+            | "self_difference"
     )
 }
 

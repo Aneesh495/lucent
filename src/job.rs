@@ -177,6 +177,9 @@ enum Action {
     Inspect {
         expr: String,
     },
+    Simplify {
+        expr: String,
+    },
 }
 
 fn exact_tolerance() -> String {
@@ -636,6 +639,18 @@ impl Job {
                     json!({"x":x,"value":result.unwrap_or_else(|error| issue_response(error, None))})
                 }).collect();
                 Ok(json!({"status":"table","precision":self.bits,"result":values}))
+            }
+            Action::Simplify { expr } => {
+                let original = expression(expr)?;
+                let (simplified, changes) = crate::simplify::simplify(&original);
+                let equation = simplified.to_string();
+                if parse(&equation).is_err() {
+                    return Err(Issue::Budget.into());
+                }
+                Ok(
+                    json!({"status":"simplified","equation":equation,"result":changes,
+                    "assumptions":["Coordinate identities retain runtime type and nonzero guards"]}),
+                )
             }
             Action::Inspect { expr } => Ok(
                 json!({"status":"syntax","canonical":expression(expr)?.to_string(),
