@@ -19,7 +19,7 @@ from workloads import COUNTS, compact, materialize
 ROOT = Path(__file__).resolve().parents[1]
 BACKENDS = {"native": ["target/release/lucent"], "wasm": ["node", "scripts/batch-wasm.mjs"],
             "browser": ["node", "scripts/batch-browser.mjs"]}
-REMAINING = ["G06 broad independent polynomial oracle", "G08 complex, 3D and ODE acceptance",
+REMAINING = ["G06 broader polynomial edge coverage", "G08 complex, 3D and ODE acceptance",
              "G09 pinned-device interaction benchmarks", "G10 p95 cancellation measurements", "G12 comprehensive accessibility",
              "G13 independent reconstruction of all exports", "G15 complete reproduction", "G16 release acceptance"]
 
@@ -138,8 +138,9 @@ def run(args):
         write(path / "ENVIRONMENT.json", {
             "platform": platform.platform(), "machine": platform.machine(), "python": platform.python_version(), "flint_python": flint,
             "rust": command_value(["rustc", "--version"]), "node": command_value(["node", "--version"]),
-            "mpfr_native": command_value(["pkg-config", "--modversion", "mpfr"]),
-            "gmp_native": command_value(["pkg-config", "--modversion", "gmp"]),
+            "mpfr_native": json.loads(subprocess.check_output(
+                [str(ROOT / "target/release/lucent")], input=b'{"ratio":"0","bits":96}'))["mpfr"],
+            "gmp_headers": command_value(["pkg-config", "--modversion", "gmp"]),
             "wasm_sha256": sha(ROOT / "web/public/engine/lucent.wasm"),
             "native_sha256": sha(ROOT / "target/release/lucent"),
         })

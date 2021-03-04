@@ -18,3 +18,9 @@ The local diagnostic host is an Apple M2 with 16 GiB and macOS. The locked Chrom
 ### Oracle erratum
 
 The first pilot flagged an exact rational square root at scalar case 08130 because the independent Arb representation of 1/3 necessarily has nonzero radius. The oracle now verifies exact square-root claims using the rational square identity and the principal sign. Workload bytes and tolerance rules are unchanged. The pilot remains in the evidence directory.
+
+### Chromium performance diagnostic
+
+Use the 1280 by 720 viewport after initial load. Collect 24 standard slider updates and 24 supersessions of a dispatched high-frequency denominator workload. Measure first preview and refinement via the actual workspace status transitions. Measure cancellation from the superseding edit to worker termination. Sample 150 consecutive animation-frame intervals during repeated anchor zoom.
+
+Use the nearest-rank p95. The thresholds are 60 median FPS, 33.333 ms p95 frame time, 100 ms p95 first preview, 1,000 ms p95 refinement and 100 ms p95 cancellation. Missing events or a stale result fail execution. Report failed performance thresholds as failed measurements. The headless run records its actual renderer and does not establish accelerated desktop performance.

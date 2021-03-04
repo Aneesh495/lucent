@@ -1,11 +1,7 @@
 .PHONY: doctor build test
 
 doctor:
-	@rustc --version
-	@node --version
-	@pkg-config --modversion mpfr gmp
-	@uname -sm
-	@df -h .
+	bash scripts/doctor.sh
 
 build:
 	cargo build --locked --release
@@ -80,3 +76,23 @@ verify: build
 .PHONY: stress
 stress:
 	node scripts/workspace-stress.mjs
+
+.PHONY: gallery polynomial-oracle
+gallery: web
+	cd web && npx playwright test --config playwright.gallery.config.ts
+
+polynomial-oracle: build
+	python3 scripts/polynomial-oracle.py "$$(mktemp -d .agent-local/polynomial.XXXXXXXX)/observations.jsonl"
+
+.PHONY: docs
+docs:
+	python3 scripts/check-docs.py
+
+.PHONY: bench
+bench: web
+	cd web && npx playwright test --config playwright.bench.config.ts
+
+.PHONY: release
+release: build
+	@test -n "$(EVIDENCE)" || { echo 'A full acceptance evidence directory is required'; exit 2; }
+	$(ORACLE_PYTHON) scripts/verify-evidence.py "$(EVIDENCE)" --require-full

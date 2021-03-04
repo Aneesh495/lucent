@@ -1,0 +1,39 @@
+name: Numerical evidence
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: lucent-numerical-evidence-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.21.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y m4 pkg-config xz-utils libmpfr-dev libgmp-dev
+          make bootstrap-native bootstrap-wasm
+          echo "LUCENT_MPFR_NATIVE=$PWD/.agent-local/toolchain/native" >> "$GITHUB_ENV"
+          python -m venv .agent-local/oracle
+          .agent-local/oracle/bin/python -m pip install python-flint==0.8.0
+          npm --prefix web ci
+          cd web && npx playwright install --with-deps chromium --only-shell
+      - name: Run and independently verify diagnostic bundle
+        run: |
+          make acceptance RUN_ID="gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" PROFILE=diagnostic
+          make verify EVIDENCE="evidence/gh-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: diagnostic-evidence
+          path: evidence/
+          retention-days: 14

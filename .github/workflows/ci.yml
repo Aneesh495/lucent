@@ -22,6 +22,10 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Native and cross-compile prerequisites
         run: sudo apt-get update && sudo apt-get install -y m4 pkg-config xz-utils graphviz
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .agent-local/toolchain
+          key: lucent-arithmetic-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/bootstrap-native.sh', 'scripts/bootstrap-wasm.sh', 'scripts/download-sources.sh', 'rust-toolchain.toml') }}
       - name: Build pinned arithmetic libraries
         run: |
           make bootstrap-native bootstrap-wasm
@@ -30,12 +34,13 @@ jobs:
         run: |
           cargo fmt --check
           cargo clippy --locked --all-targets -- -D warnings
-          make test certificate-check parity data
+          make test certificate-check parity data stress docs
       - name: Production browser build and interactions
         run: |
           npm --prefix web ci
           cd web && npx playwright install --with-deps chromium --only-shell && cd ..
           make browser-test
+          make pages
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
