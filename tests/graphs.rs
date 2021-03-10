@@ -79,3 +79,32 @@ fn implicit_crossing_is_labeled_sampled() {
     assert!(plot.cells.iter().any(|c| c.kind == CellKind::Crossing
         && c.reason.as_deref().unwrap().contains("topology unresolved")));
 }
+
+#[test]
+fn interval_gradient_proves_a_single_crossing_on_regular_cells() {
+    let expr = parse("x - .31").unwrap().expression().unwrap();
+    let view = View {
+        x: [-2.0, 2.0],
+        y: [-2.0, 2.0],
+        pixels: [128, 128],
+    };
+    let ctx = Context {
+        program: &Program::default(),
+        scope: &Scope::new(),
+        control: controls(),
+    };
+    let plotted = area(&ctx, &expr, view, false).unwrap();
+    let crossings: Vec<_> = plotted
+        .cells
+        .iter()
+        .filter_map(|c| c.topology.as_ref())
+        .collect();
+    assert!(!crossings.is_empty());
+    assert!(crossings.iter().all(|c| {
+        c.axis == "x"
+            && c.derivative[0] > 0.0
+            && c.edge_brackets
+                .iter()
+                .all(|[a, b]| *a <= 0.31 && 0.31 <= *b)
+    }));
+}

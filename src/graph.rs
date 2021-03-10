@@ -273,6 +273,14 @@ fn outside(range: [f64; 2], domain: [f64; 2]) -> bool {
 }
 
 #[derive(Debug, Serialize)]
+pub struct RegularCrossing {
+    pub axis: &'static str,
+    pub derivative: [f64; 2],
+    pub face_signs: [i8; 2],
+    pub edge_brackets: [[f64; 2]; 2],
+}
+
+#[derive(Debug, Serialize)]
 pub struct AreaCell {
     pub x: [f64; 2],
     pub y: [f64; 2],
@@ -281,6 +289,8 @@ pub struct AreaCell {
     pub segment: Option<[[f64; 2]; 2]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topology: Option<RegularCrossing>,
 }
 
 #[derive(Debug, Serialize)]
@@ -293,6 +303,10 @@ pub fn area(ctx: &Context, expr: &Expr, view: View, inequality: bool) -> Result<
     let controls = ctx.control.check()?;
     let view = view.validate()?;
     let scale = view.scales();
+    let partials = (!inequality)
+        .then(|| inline(expr, ctx.program).ok())
+        .flatten()
+        .map(|expanded| ["x", "y"].map(|axis| derivative(&expanded, axis, controls.angle).ok()));
     let mut work = vec![(view.x, view.y, 0)];
     let mut cells = Vec::new();
     let mut processed = 0;
@@ -303,6 +317,7 @@ pub fn area(ctx: &Context, expr: &Expr, view: View, inequality: bool) -> Result<
             kind: CellKind::Unresolved,
             segment: None,
             reason: None,
+            topology: None,
         };
         if processed == controls.budget {
             cell.reason = Some("Subdivision budget reached".into());
@@ -358,7 +373,15 @@ pub fn area(ctx: &Context, expr: &Expr, view: View, inequality: bool) -> Result<
             }
         }
         if potentially_crossing {
-            if let Some(segment) = crossing(ctx, expr, x, y) {
+            let proof = partials
+                .as_ref()
+                .and_then(|d| regular_crossing(ctx, expr, [x, y], d));
+            if let Some((segment, witness)) = proof {
+                cell.kind = CellKind::Crossing;
+                cell.segment = Some(segment);
+                cell.topology = Some(witness);
+                cell.reason = Some("Single crossing proved; chord remains approximate".into());
+            } else if let Some(segment) = crossing(ctx, expr, x, y) {
                 cell.kind = CellKind::Crossing;
                 cell.segment = Some(segment);
                 cell.reason = Some("Sampled edge crossing; topology unresolved".into());
@@ -367,6 +390,87 @@ pub fn area(ctx: &Context, expr: &Expr, view: View, inequality: bool) -> Result<
         cells.push(cell);
     }
     Ok(Area { cells, processed })
+}
+
+fn regular_crossing(
+    ctx: &Context,
+    expr: &Expr,
+    cell: [[f64; 2]; 2],
+    derivatives: &[Option<Expr>; 2],
+) -> Option<([[f64; 2]; 2], RegularCrossing)> {
+    for (axis, derivative) in derivatives.iter().enumerate() {
+        if let Some(diff) = derivative {
+            if let Some(proof) = crossing_axis(ctx, expr, cell, diff, axis) {
+                return Some(proof);
+            }
+        }
+    }
+    None
+}
+
+fn crossing_axis(
+    ctx: &Context,
+    expr: &Expr,
+    cell: [[f64; 2]; 2],
+    diff: &Expr,
+    axis: usize,
+) -> Option<([[f64; 2]; 2], RegularCrossing)> {
+    let coordinates = |c: [[f64; 2]; 2]| [("x", c[0]), ("y", c[1])];
+    let slope = ctx
+        .real(diff, &coordinates(cell))
+        .ok()?
+        .enclose(ctx.control.bits)
+        .ok()?;
+    if slope.contains_zero() {
+        return None;
+    }
+    let side = |boundary, transverse| {
+        let mut face = cell;
+        face[axis] = [boundary; 2];
+        face[1 - axis] = transverse;
+        ctx.real(expr, &coordinates(face)).ok()?.sign()
+    };
+    let [a, b] = cell[axis];
+    let transverse = cell[1 - axis];
+    let left = side(a, transverse)?;
+    let right = side(b, transverse)?;
+    if left.is_eq() || right.is_eq() || left == right {
+        return None;
+    }
+    let mut brackets = [[a, b]; 2];
+    let mut segment = [[0.0; 2]; 2];
+    for (j, t) in transverse.into_iter().enumerate() {
+        let [mut lo, mut hi] = brackets[j];
+        for _ in 0..16 {
+            let m = lo.midpoint(hi);
+            if m <= lo || m >= hi {
+                break;
+            }
+            match side(m, [t; 2]) {
+                Some(Ordering::Equal) => {
+                    lo = m;
+                    hi = m;
+                    break;
+                }
+                Some(sign) if sign == left => lo = m,
+                Some(_) => hi = m,
+                None => break,
+            }
+        }
+        brackets[j] = [lo, hi];
+        segment[j][axis] = lo.midpoint(hi);
+        segment[j][1 - axis] = t;
+    }
+    let sign = |s: Ordering| if s.is_lt() { -1 } else { 1 };
+    Some((
+        segment,
+        RegularCrossing {
+            axis: ["x", "y"][axis],
+            derivative: slope.bounds().ok()?,
+            face_signs: [sign(left), sign(right)],
+            edge_brackets: brackets,
+        },
+    ))
 }
 
 fn crossing(ctx: &Context, expr: &Expr, x: [f64; 2], y: [f64; 2]) -> Option<[[f64; 2]; 2]> {

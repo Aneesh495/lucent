@@ -414,7 +414,7 @@ function diagnose(key: string, response: EngineResult): void {
   if (response.message) node.textContent = response.message + position;
   else if (kind === 'approximate_geometry') {
     const geometry = response.result as Geometry;
-    const uncertain = geometry.cells.filter(tile => tile.kind === 'unresolved' || tile.kind === 'crossing').length;
+    const uncertain = geometry.cells.filter(tile => tile.kind === 'unresolved' || tile.kind === 'crossing' && !tile.topology).length;
     node.textContent = uncertain ? uncertain + ' unresolved cells' : 'Approximate geometry';
   } else if (response.result && typeof response.result === 'object' && 'samples' in response.result) {
     const trajectory = response.result as Trajectory;
@@ -501,7 +501,7 @@ function compute(expected: number, preview: boolean): void {
     } else {
       settled = true;
       const count = [...layers.values()].reduce((sum, item) => sum + (item.layer.geometry?.cells
-        .filter(t => t.kind === 'unresolved' || t.kind === 'crossing').length ?? item.layer.raster?.undefined_samples ?? 0), 0);
+        .filter(t => t.kind === 'unresolved' || t.kind === 'crossing' && !t.topology).length ?? item.layer.raster?.undefined_samples ?? 0), 0);
       status('settled', renderer.backend + (count ? ' · ' + count + ' unresolved' : ' · Current'));
     }
   }, message => status('error', message));

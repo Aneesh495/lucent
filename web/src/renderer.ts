@@ -7,6 +7,7 @@ export interface Tile {
   x?: Domain;
   y?: Domain;
   error_px?: number;
+  topology?: { axis: "x" | "y"; edge_brackets: [Domain, Domain] };
   reason?: string;
 }
 export interface Geometry { cells: Tile[]; processed: number; dimension?: [number[], number[]] }
@@ -247,7 +248,7 @@ export class Renderer {
           const segment = clipped(this.project(tile.segment[0]), this.project(tile.segment[1]), this.width, this.height);
           if (segment) this.lines.push({ a: segment[0], b: segment[1], color: cell.color, dashed: cell.style === 'dashed' });
         }
-        if (tile.kind === 'inside' || uncertainty && ['unresolved', 'excluded', 'crossing'].includes(tile.kind)) {
+        if (tile.kind === 'inside' || uncertainty && (['unresolved', 'excluded'].includes(tile.kind) || tile.kind === 'crossing' && !tile.topology)) {
           const x = tile.x ?? (cell.mode === 'explicit' ? tile.domain : undefined);
           if (!x) continue;
           const y = tile.y ?? view.y;

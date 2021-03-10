@@ -171,6 +171,20 @@ def graph(row, actual):
 
 
 def implicit(cells, view, center):
+    def min_sq(p):
+        return 0 if p[0] <= 0 <= p[1] else min(a*a for a in p)
+
+    def max_sq(p):
+        return max(a*a for a in p)
+
+    def phase(value, transverse):
+        square = value*value
+        if square + min_sq(transverse) > Fraction(1,4):
+            return 1
+        if square + max_sq(transverse) < Fraction(1,4):
+            return -1
+        return 0
+
     sweep = {}
     crossings = 0
     for index, cell in enumerate(cells):
@@ -181,13 +195,30 @@ def implicit(cells, view, center):
         sweep.setdefault(x[1], []).append((index, None))
         if cell["kind"] == "crossing":
             crossings += 1
-            if "topology unresolved" not in cell.get("reason", "") or not cell.get("segment"):
-                raise ValueError("Implicit chord lacks its topology limitation")
+            if not cell.get("segment"):
+                raise ValueError("Missing implicit chord geometry")
+            topology = cell.get("topology")
+            if not topology:
+                if "topology unresolved" not in cell.get("reason", ""):
+                    raise ValueError("Sampled implicit chord lacks its topology limitation")
+            else:
+                axes = [[Fraction(a)-center for a in x], list(map(Fraction,y))]
+                axis = {"x":0, "y":1}[topology["axis"]]
+                along, transverse = axes[axis], axes[1-axis]
+                if along[0] <= 0 <= along[1]:
+                    raise ValueError("Claimed monotone axis may have a zero derivative")
+                signs = [phase(side, transverse) for side in along]
+                if not all(signs) or signs[0] == signs[1] or topology["face_signs"] != signs:
+                    raise ValueError("Independent circle face ranges reject the topology claim")
+                for j, (a,b) in enumerate(topology["edge_brackets"]):
+                    shift = center if axis == 0 else 0
+                    a, b = Fraction(a) - shift, Fraction(b) - shift
+                    t = transverse[j]
+                    if not along[0] <= a <= b <= along[1] or not min_sq([a,b]) + t*t <= Fraction(1,4) <= max_sq([a,b]) + t*t:
+                        raise ValueError("Edge bracket excludes the analytic crossing")
         elif cell["kind"] == "empty":
             translated = [Fraction(a) - center for a in x]
             y = list(map(Fraction, y))
-            min_sq = lambda p: 0 if p[0] <= 0 <= p[1] else min(a*a for a in p)
-            max_sq = lambda p: max(a*a for a in p)
             if min_sq(translated) + min_sq(y) <= Fraction(1, 4) <= max_sq(translated) + max_sq(y):
                 raise ValueError("Empty cell intersects analytic circle")
     active = {}
