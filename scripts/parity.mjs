@@ -14,6 +14,11 @@ const inputs = [
   { ratio: '1/0', bits: 128 },
   { ratio: '1', bits: 999 },
 ].map(value => JSON.stringify(value));
+inputs.push(
+  '{"op":"table","expr":"x","samples":[-0.0,0.0]}',
+  '{"op":"evaluate","expr":"1/0"}',
+  '{"op":"table","expr":"x","samples":[1e400]}',
+);
 
 const native = spawnSync('./target/release/lucent', {
   input: inputs.join('\n') + '\n',
@@ -37,4 +42,9 @@ assert.ok(ordinary.bounds[0] < ordinary.bounds[1]);
 assert.equal(JSON.parse(expected[2]).bounds[0], 1);
 assert.deepEqual(JSON.parse(expected[3]).bounds, [0, Number.MIN_VALUE]);
 assert.equal(JSON.parse(expected[4]).status, 'unresolved');
+const zero = JSON.parse(expected[7]).result;
+assert.ok(Object.is(zero[0].value.bounds[0], -0));
+assert.ok(Object.is(zero[1].value.bounds[0], 0));
+assert.equal(JSON.parse(expected[8]).status, 'undefined');
+assert.equal(JSON.parse(expected[9]).status, 'error');
 console.log(`Native/WASM parity: ${inputs.length} MPFR requests`);

@@ -1,3 +1,4 @@
+import { wireJson } from './wire-json';
 import type { EngineTask, EngineResult } from './engine';
 
 interface Module {
@@ -15,7 +16,7 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 function execute(module: Module, request: Record<string, unknown>): EngineResult {
-  const bytes = encoder.encode(JSON.stringify(request));
+  const bytes = encoder.encode(wireJson(request));
   const pointer = module._lc_alloc(bytes.length);
   if (!pointer) return { status: 'error', message: 'Request exceeds the engine input budget' };
   try {
