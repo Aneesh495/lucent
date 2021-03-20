@@ -1,0 +1,18 @@
+digraph Lucent {
+  graph [rankdir=LR, bgcolor="#fffefa", pad=.16, labelloc=t, label="Document persistence", fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", color="#91a79b", fillcolor="#eef5ed", fontname="Helvetica", fontsize=11];
+  edge [fontname="Helvetica", fontsize=9, color="#506e64", fontcolor="#37564c"];
+  doc [label="Canonical v2"];
+  history [label="Bounded undo and redo"];
+  encode [label="Schema validation"];
+  primary [label="Primary local save"];
+  backup [label="Last valid backup"];
+  import [label="v1 or v2 import"];
+  import -> encode [label="validate or migrate"];
+  encode -> doc [label="accepted fields"];
+  doc -> history [label="record edit"];
+  history -> doc [label="undo or redo"];
+  doc -> primary [label="debounced write"];
+  primary -> backup [label="rotate valid prior"];
+  backup -> doc [label="recover"];
+}

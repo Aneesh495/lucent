@@ -1,0 +1,18 @@
+digraph Lucent {
+  graph [rankdir=LR, bgcolor="#fffefa", pad=.16, labelloc=t, label="Numerical components", fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", color="#91a79b", fillcolor="#eef5ed", fontname="Helvetica", fontsize=11];
+  edge [fontname="Helvetica", fontsize=9, color="#506e64", fontcolor="#37564c"];
+  lang [label="Pratt AST"];
+  dag [label="Definition DAG"];
+  eval [label="Typed evaluator"];
+  exact [label="Big integer ratios"];
+  interval [label="Interval operations"];
+  mp [label="MPFR C primitives"];
+  calculus [label="Root and integral tools"];
+  lang -> dag [label="spanned syntax"];
+  dag -> eval [label="lexical scopes"];
+  eval -> exact [label="rational branch"];
+  eval -> interval [label="range branch"];
+  interval -> mp [label="directed endpoints"];
+  calculus -> eval [label="witness evaluation"];
+}

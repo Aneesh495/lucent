@@ -1,0 +1,17 @@
+digraph Lucent {
+  graph [rankdir=LR, bgcolor="#fffefa", pad=.16, labelloc=t, label="Evidence lineage", fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", color="#91a79b", fillcolor="#eef5ed", fontname="Helvetica", fontsize=11];
+  edge [fontname="Helvetica", fontsize=9, color="#506e64", fontcolor="#37564c"];
+  commit [label="Trusted source commit"];
+  data [label="Frozen fixture hashes"];
+  run [label="Native, WASM, Chromium"];
+  raw [label="Raw responses and commands"];
+  oracle [label="Arb and analytic checks"];
+  verify [label="Bounded replay verifier"];
+  commit -> run [label="clean build"];
+  data -> run [label="immutable cases"];
+  run -> raw [label="observations"];
+  raw -> oracle [label="reference comparison"];
+  raw -> verify [label="coverage and replay"];
+  commit -> verify [label="independent identity"];
+}

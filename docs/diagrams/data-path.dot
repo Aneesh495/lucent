@@ -1,0 +1,16 @@
+digraph Lucent {
+  graph [rankdir=LR, bgcolor="#fffefa", pad=.16, labelloc=t, label="Expression to pixels", fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", color="#91a79b", fillcolor="#eef5ed", fontname="Helvetica", fontsize=11];
+  edge [fontname="Helvetica", fontsize=9, color="#506e64", fontcolor="#37564c"];
+  input [label="Expression and viewport"];
+  parse [label="Parse and bind"];
+  tile [label="Evaluate each closed tile"];
+  cell [label="Geometry and coverage"];
+  project [label="Project to CSS pixels"];
+  draw [label="Canvas grid and GPU layer"];
+  input -> parse [label="source bytes"];
+  parse -> tile [label="typed AST"];
+  tile -> cell [label="partition"];
+  cell -> project [label="independent segments"];
+  project -> draw [label="screen-space vertices"];
+}

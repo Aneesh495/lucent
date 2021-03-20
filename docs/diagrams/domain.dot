@@ -1,0 +1,18 @@
+digraph Lucent {
+  graph [rankdir=LR, bgcolor="#fffefa", pad=.16, labelloc=t, label="Domain-aware curve cell", fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", color="#91a79b", fillcolor="#eef5ed", fontname="Helvetica", fontsize=11];
+  edge [fontname="Helvetica", fontsize=9, color="#506e64", fontcolor="#37564c"];
+  work [label="Closed parameter interval"];
+  bound [label="MPFR domain and range"];
+  split [label="Split at midpoint"];
+  line [label="Chord if screen estimate passes"];
+  gap [label="Marked excluded or unresolved cell"];
+  out [label="Offscreen"];
+  work -> bound [label="evaluate"];
+  bound -> line [label="valid and small error"];
+  bound -> split [label="uncertain or wide"];
+  bound -> out [label="proved outside"];
+  bound -> gap [label="excluded"];
+  split -> work [label="child interval"];
+  split -> gap [label="budget exhausted"];
+}

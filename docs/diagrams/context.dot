@@ -1,0 +1,15 @@
+digraph Lucent {
+  graph [rankdir=LR, bgcolor="#fffefa", pad=.16, labelloc=t, label="System context", fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", color="#91a79b", fillcolor="#eef5ed", fontname="Helvetica", fontsize=11];
+  edge [fontname="Helvetica", fontsize=9, color="#506e64", fontcolor="#37564c"];
+  reader [label="Mathematics explorer"];
+  browser [label="Local browser workbench"];
+  cli [label="Native CLI"];
+  engine [label="Rust numerical engine"];
+  repo [label="Source and evidence"];
+  reader -> browser [label="edits and explores"];
+  reader -> cli [label="reproduces request"];
+  browser -> engine [label="WASM ABI"];
+  cli -> engine [label="native API"];
+  repo -> reader [label="reproduction inputs"];
+}

@@ -1,0 +1,16 @@
+digraph Lucent {
+  graph [rankdir=LR, bgcolor="#fffefa", pad=.16, labelloc=t, label="Verification layers", fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", color="#91a79b", fillcolor="#eef5ed", fontname="Helvetica", fontsize=11];
+  edge [fontname="Helvetica", fontsize=9, color="#506e64", fontcolor="#37564c"];
+  test [label="Native focused tests"];
+  oracle [label="Frozen independent oracle"];
+  browser [label="Playwright interaction tests"];
+  negative [label="Rehashed negative claims"];
+  bundle [label="Source-bound bundle"];
+  release [label="Full gate decision"];
+  test -> bundle [label="unit and integration"];
+  oracle -> bundle [label="per-case outcomes"];
+  browser -> bundle [label="screens and traces"];
+  negative -> bundle [label="subprocess verdicts"];
+  bundle -> release [label="explicit gate audit"];
+}

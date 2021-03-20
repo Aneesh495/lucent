@@ -122,6 +122,37 @@ def compress(file):
     file.unlink()
 
 
+def full_checks(path):
+    observations = {}
+    checks = [
+        ("native-tests", ["make", "test", "parity"], False),
+        ("browser-tests", ["make", "browser-test"], True),
+        ("workspace-stress", ["make", "stress"], False),
+        ("polynomial-oracle", [sys.executable, "scripts/polynomial-oracle.py", str(path / "polynomials.jsonl")], False),
+        ("gallery", ["make", "gallery"], True),
+        ("interaction", ["make", "bench"], True),
+        ("docs", ["make", "docs"], False),
+    ]
+    for name, argv, browser in checks:
+        try:
+            record(path, argv, out=path / f"{name}.log")
+            observations[name] = {"status": "passed"}
+        except RuntimeError as error:
+            observations[name] = {"status": "failed", "reason": str(error)}
+        finally:
+            results = ROOT / "web" / "test-results"
+            if browser and results.is_dir():
+                shutil.copytree(results, path / name)
+    performance = list((path / "interaction").rglob("observations.json"))
+    if len(performance) == 1:
+        measured = json.loads(performance[0].read_text())
+        observations["interaction"].update({
+            "metrics": measured["metrics"], "thresholds_met": measured["passed"], "renderer": measured["engine"]["webgl"],
+        })
+        if not all(measured["passed"].values()):
+            observations["interaction"]["status"] = "failed"
+    return observations
+
 def run(args):
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}", args.run_id):
         raise ValueError("Invalid run identity")
@@ -169,8 +200,11 @@ def run(args):
             record(path, [sys.executable, "scripts/negative-controls.py", str(path / "controls")])
         passed = all(suite["passed"] for suite in outcome["suites"].values())
         if args.profile == "full":
+            outcome["supplemental"] = full_checks(path)
             outcome["remaining"] = REMAINING
-            outcome["status"] = "incomplete" if passed else "failed"
+            outcome["status"] = "incomplete" if passed and all(
+                check["status"] == "passed" for check in outcome["supplemental"].values()
+            ) else "failed"
         elif passed:
             outcome["status"] = "diagnostic_passed"
     except Exception as exc:

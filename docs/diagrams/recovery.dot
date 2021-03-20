@@ -1,0 +1,18 @@
+digraph Lucent {
+  graph [rankdir=LR, bgcolor="#fffefa", pad=.16, labelloc=t, label="Save and request recovery", fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", color="#91a79b", fillcolor="#eef5ed", fontname="Helvetica", fontsize=11];
+  edge [fontname="Helvetica", fontsize=9, color="#506e64", fontcolor="#37564c"];
+  input [label="Invalid import or expression"];
+  parse [label="Bounded validation"];
+  message [label="Specific diagnostic"];
+  persist [label="Primary autosave corrupt"];
+  fallback [label="Decode recovery copy"];
+  safe [label="Retain or restore valid document"];
+  empty [label="Open default document"];
+  input -> parse [label="parse"];
+  parse -> message [label="validation failure"];
+  message -> safe [label="retain source"];
+  persist -> fallback [label="read backup"];
+  fallback -> safe [label="valid"];
+  fallback -> empty [label="no valid backup"];
+}

@@ -1,0 +1,17 @@
+digraph Lucent {
+  graph [rankdir=LR, bgcolor="#fffefa", pad=.16, labelloc=t, label="Hosted preview packaging", fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", color="#91a79b", fillcolor="#eef5ed", fontname="Helvetica", fontsize=11];
+  edge [fontname="Helvetica", fontsize=9, color="#506e64", fontcolor="#37564c"];
+  source [label="Pushed main"];
+  build [label="Pinned Emscripten build"];
+  site [label="Static application artifact"];
+  libs [label="Sources and relinkable archive"];
+  pages [label="GitHub Pages"];
+  worker [label="Local browser calculation"];
+  source -> build [label="checkout"];
+  build -> site [label="bundle"];
+  build -> libs [label="arithmetic libraries"];
+  libs -> site [label="package notices and sources"];
+  site -> pages [label="deploy"];
+  pages -> worker [label="load module"];
+}

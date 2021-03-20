@@ -1,0 +1,19 @@
+digraph Lucent {
+  graph [rankdir=LR, bgcolor="#fffefa", pad=.16, labelloc=t, label="Worker concurrency", fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", color="#91a79b", fillcolor="#eef5ed", fontname="Helvetica", fontsize=11];
+  edge [fontname="Helvetica", fontsize=9, color="#506e64", fontcolor="#37564c"];
+  change [label="Edit increments generation"];
+  cancel [label="Terminate active worker"];
+  preview [label="Preview task"];
+  refine [label="Refinement task"];
+  guard [label="Ticket matches?"];
+  commit [label="Display current reply"];
+  drop [label="Discard stale reply"];
+  change -> cancel [label="supersede"];
+  cancel -> preview [label="new ticket"];
+  preview -> guard [label="response"];
+  refine -> guard [label="response"];
+  guard -> commit [label="yes"];
+  guard -> drop [label="no"];
+  commit -> refine [label="if preview"];
+}

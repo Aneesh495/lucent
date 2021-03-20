@@ -1,0 +1,17 @@
+digraph Lucent {
+  graph [rankdir=LR, bgcolor="#fffefa", pad=.16, labelloc=t, label="Allocation ownership", fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", color="#91a79b", fillcolor="#eef5ed", fontname="Helvetica", fontsize=11];
+  edge [fontname="Helvetica", fontsize=9, color="#506e64", fontcolor="#37564c"];
+  client [label="Document owns editable inputs"];
+  worker [label="Worker owns input bytes"];
+  call [label="Synchronous Rust request"];
+  mp [label="Rust Drop clears MPFR values"];
+  out [label="Borrowed response buffer"];
+  copy [label="Worker copies reply"];
+  client -> worker [label="structured clone"];
+  worker -> call [label="alloc and invoke"];
+  call -> mp [label="scoped values"];
+  call -> out [label="serializes"];
+  out -> copy [label="before next call"];
+  worker -> worker [label="free input after call"];
+}

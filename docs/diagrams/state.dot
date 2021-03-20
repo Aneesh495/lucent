@@ -1,0 +1,17 @@
+digraph Lucent {
+  graph [rankdir=LR, bgcolor="#fffefa", pad=.16, labelloc=t, label="Computation state", fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", color="#91a79b", fillcolor="#eef5ed", fontname="Helvetica", fontsize=11];
+  edge [fontname="Helvetica", fontsize=9, color="#506e64", fontcolor="#37564c"];
+  pending [label="Pending"];
+  preview [label="Preview shown"];
+  settled [label="Settled with coverage"];
+  error [label="Error or timeout"];
+  restart [label="New input"];
+  pending -> preview [label="fast batch completes"];
+  preview -> settled [label="refinement completes"];
+  pending -> error [label="worker failure"];
+  preview -> error [label="timeout"];
+  settled -> restart [label="edit or navigation"];
+  error -> restart [label="repair or retry"];
+  restart -> pending [label="invalidate ticket"];
+}
