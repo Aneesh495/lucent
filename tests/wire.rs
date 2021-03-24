@@ -154,3 +154,33 @@ fn coordinate_cancellation_keeps_domain_guards() {
     let independent = run(json!({"op":"simplify","expr":"interval(1,2)-interval(1,2)"}));
     assert_eq!(independent["result"]["guarded_identities"], 0);
 }
+
+#[test]
+fn real_rational_powers_check_exact_roots_branches_and_units() {
+    assert_eq!(
+        run(json!({"op":"evaluate","expr":"(-8)^(2/3)"}))["result"]["value"],
+        "4"
+    );
+    assert_eq!(
+        run(json!({"op":"evaluate","expr":"(-8)^(-1/3)"}))["result"]["value"],
+        "-1/2"
+    );
+    assert_eq!(
+        run(json!({"op":"evaluate","expr":"(16m^4)^(1/4)"}))["result"]["dimension"],
+        json!([1, 0, 0, 0])
+    );
+    let range = run(json!({"op":"enclose","expr":"x^(1/3)","domain":[-8,27]}));
+    assert_eq!(range["result"]["bounds"], json!([-2.0, 3.0]));
+    assert_eq!(
+        run(json!({"op":"enclose","expr":"x^(1/2)","domain":[-8,27]}))["status"],
+        "unresolved"
+    );
+    assert_eq!(
+        run(json!({"op":"derivative","expr":"x^(3/2)","at":0}))["status"],
+        "unresolved"
+    );
+    let derivative = run(json!({"op":"derivative","expr":"x^(1/3)","at":-8}));
+    assert_eq!(derivative["status"], "derivative");
+    let actual = derivative["result"]["automatic"].as_array().unwrap();
+    assert!(actual[0].as_f64().unwrap() <= 1.0 / 12.0 && 1.0 / 12.0 <= actual[1].as_f64().unwrap());
+}

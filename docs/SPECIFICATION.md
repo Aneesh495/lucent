@@ -4,13 +4,13 @@ Enter one expression per row. Definitions use `name := expression` or `f(u,v) :=
 
 ## Grammar
 
-From strongest to weakest, parentheses and named application, right-associative integer powers, prefix signs, multiplication and division, addition and subtraction, and comparisons. Thus `-2^2` is `-(2^2)`, `2^3^2` is `2^(3^2)`, and `1/2x` is `(1/2)*x`. Implicit multiplication before an identifier or opening parenthesis has ordinary multiplication precedence. An identifier followed by parentheses is a call. Comparisons use `=`, `!=`, `<`, `<=`, `>` or `>=`. They do not chain. Graph modes interpret implicit equations as the residual from left minus right.
+From strongest to weakest, parentheses and named application, right-associative powers, prefix signs, multiplication and division, addition and subtraction, and comparisons. Thus `-2^2` is `-(2^2)`, `2^3^2` is `2^(3^2)`, and `1/2x` is `(1/2)*x`. Implicit multiplication before an identifier or opening parenthesis has ordinary multiplication precedence. An identifier followed by parentheses is a call. Comparisons use `=`, `!=`, `<`, `<=`, `>` or `>=`. They do not chain. Graph modes interpret implicit equations as the residual from left minus right.
 
 Decimal literals are exact base-ten rationals, including scientific notation. An `e` without a signed or unsigned exponent can be the constant Euler's number in an implicit product. The formatter keeps decimal lexemes and inserts explicit multiplication. Source spans use UTF-8 byte offsets. There is a 384-token limit, a parser depth of 48 and an evaluator step budget.
 
 ## Types
 
-- Real numbers are exact rational values or MPFR enclosures. Powers require an exact integer exponent. An evaluated zero base to power zero is one. Evaluation of the base can still fail.
+- Real numbers are exact rational values or MPFR enclosures. Real powers accept bounded exact rational exponents, including odd real roots of negative bases. Complex powers require an exact integer. An evaluated zero base to power zero is one. Evaluation of the base can still fail.
 - Quantities carry exponents for metres, seconds, kilograms and radians. Compatible units convert to these bases. Additions and comparisons require equal dimensions. Angular units override the global degree/radian interpretation of dimensionless trig arguments.
 - Complex pairs support arithmetic, integer powers, conjugation, projections, magnitude, principal log and square root, and exponential. Explicit `i` or `complex(re,im)` selects complex evaluation. Real `sqrt(-1)` remains undefined.
 - Lists use square brackets. Finite `sum` and `product` operate on a list. Nested rectangular lists support transpose, exact rational determinant and unique exact solve. Dot product checks length. Floating matrix jobs have explicit rank thresholds and residuals.

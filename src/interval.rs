@@ -228,6 +228,22 @@ impl Interval {
         Ok(Self { low, high })
     }
 
+    pub fn root(&self, degree: u32) -> Result<Self> {
+        if !(1..=256).contains(&degree) {
+            return Err(Issue::Budget);
+        }
+        if degree % 2 == 0 && self.low.sign().is_lt() {
+            if self.high.sign().is_lt() {
+                return Err(Issue::Excluded("Even root needs a nonnegative base"));
+            }
+            return Err(Issue::Split("Even root may have a negative base"));
+        }
+        Ok(Self {
+            low: self.low.root(degree, Down)?,
+            high: self.high.root(degree, Up)?,
+        })
+    }
+
     pub fn pow(&self, exponent: i32) -> Result<Self> {
         if exponent.unsigned_abs() > 4096 {
             return Err(Issue::Budget);

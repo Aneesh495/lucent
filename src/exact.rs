@@ -52,6 +52,33 @@ pub fn power(base: &Rational, exponent: i32) -> Result<Rational> {
     checked(base.pow(exponent))
 }
 
+pub fn power_parts(exponent: &Rational) -> Result<(i32, u32)> {
+    use num_traits::ToPrimitive;
+    let numerator = exponent.numer().to_i32().ok_or(Issue::Budget)?;
+    let denominator = exponent.denom().to_u32().ok_or(Issue::Budget)?;
+    if numerator.unsigned_abs() > 4096 || !(1..=256).contains(&denominator) {
+        return Err(Issue::Budget);
+    }
+    Ok((numerator, denominator))
+}
+
+pub fn exact_root(base: &Rational, degree: u32) -> Result<Option<Rational>> {
+    use num_traits::Signed;
+    if !(1..=256).contains(&degree) {
+        return Err(Issue::Budget);
+    }
+    if degree % 2 == 0 && base.is_negative() {
+        return Err(Issue::Excluded("Even root needs a nonnegative base"));
+    }
+    let n = base.numer().nth_root(degree);
+    let d = base.denom().nth_root(degree);
+    if &n.pow(degree) == base.numer() && &d.pow(degree) == base.denom() {
+        Ok(Some(Rational::new(n, d)))
+    } else {
+        Ok(None)
+    }
+}
+
 pub fn ratio(text: &str) -> Result<Rational> {
     if text.len() > 10_000 {
         return Err(Issue::Budget);

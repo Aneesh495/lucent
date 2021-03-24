@@ -1,5 +1,8 @@
+use num_traits::{One, Signed, Zero};
+
 use crate::{
     eval::Angle,
+    exact::{self, Rational},
     interval::{Issue, Result},
     lang::{Expr, Kind, Op, Span},
     program::Program,
@@ -117,17 +120,17 @@ fn derive(expr: &Expr, axis: &str, angle: Angle, remaining: &mut usize) -> Resul
         Kind::Name(name) => number(i32::from(name == axis)),
         Kind::Negative(a) => Expr::negated(derive(a, axis, angle, remaining)?, span),
         Kind::Binary(Op::Pow, a, b) => {
-            let n = literal_integer(b).ok_or(Issue::Unsupported(
-                "Derivative needs a literal integer exponent",
+            let n = literal_ratio(b).ok_or(Issue::Unsupported(
+                "Derivative needs a literal rational exponent",
             ))?;
-            if n == 0 {
+            if n.is_zero() {
                 return Ok(number(0));
             }
-            if n.unsigned_abs() > 4095 {
-                return Err(Issue::Budget);
-            }
-            let power = binary(Op::Pow, copy(a, remaining)?, number(n - 1));
-            let factor = binary(Op::Mul, number(n), power);
+            exact::power_parts(&n)?;
+            let previous = &n - Rational::one();
+            exact::power_parts(&previous)?;
+            let power = binary(Op::Pow, copy(a, remaining)?, ratio_tree(previous, span));
+            let factor = binary(Op::Mul, ratio_tree(n, span), power);
             binary(Op::Mul, factor, derive(a, axis, angle, remaining)?)
         }
         Kind::Binary(op, a, b) => {
@@ -227,6 +230,39 @@ fn derive(expr: &Expr, axis: &str, angle: Angle, remaining: &mut usize) -> Resul
         }
         Kind::List(_) => return Err(Issue::Unsupported("Lists have no scalar derivative")),
     })
+}
+
+fn literal_ratio(expr: &Expr) -> Option<Rational> {
+    match &expr.kind {
+        Kind::Literal(text) => exact::decimal(text).ok(),
+        Kind::Negative(a) => Some(-literal_ratio(a)?),
+        Kind::Binary(Op::Div, a, b) => {
+            let b = literal_ratio(b)?;
+            if b.is_zero() {
+                return None;
+            }
+            exact::checked(literal_ratio(a)? / b).ok()
+        }
+        _ => None,
+    }
+}
+
+fn ratio_tree(number: Rational, span: Span) -> Expr {
+    let magnitude = Expr::literal(number.numer().abs().to_string(), span);
+    let numerator = if number.is_negative() {
+        Expr::negated(magnitude, span)
+    } else {
+        magnitude
+    };
+    if number.is_integer() {
+        return numerator;
+    }
+    Expr::binary(
+        Op::Div,
+        numerator,
+        Expr::literal(number.denom().to_string(), span),
+        span,
+    )
 }
 
 fn literal(value: i32, span: Span) -> Expr {

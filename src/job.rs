@@ -583,7 +583,7 @@ impl Job {
             Action::Derivative { expr, at } => {
                 let expr = expression(expr)?;
                 let derivative = calculus::first_derivative(&ctx, &expr)?;
-                ctx.real(&expr, &[("x", [*at; 2])])?;
+                ctx.real(&expr, &[("x", [at.next_down(), at.next_up()])])?;
                 let real = ctx.real(&derivative, &[("x", [*at; 2])])?;
                 let bound = real.enclose(self.bits)?.bounds()?;
                 let h = f64::EPSILON.cbrt() * at.abs().max(1.0);

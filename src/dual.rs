@@ -54,18 +54,12 @@ fn sweep(ctx: &Context, expr: &Expr, point: f64) -> Result<Dual> {
                     }
                 }
                 Op::Pow if b.tangent.is_zero() => {
-                    let k = b.value.as_i32()?;
-                    if k == 0 {
+                    if b.value.is_zero() {
                         n(0)
                     } else {
-                        let prior = a
-                            .value
-                            .power(k.checked_sub(1).ok_or(Issue::Budget)?, bits)?;
-                        binary(
-                            &binary(&n(i64::from(k)), Op::Mul, &prior)?,
-                            Op::Mul,
-                            &a.tangent,
-                        )?
+                        let prior_power = binary(&b.value, Op::Sub, &n(1))?;
+                        let prior = a.value.rational_power(&prior_power, bits)?;
+                        binary(&binary(&b.value, Op::Mul, &prior)?, Op::Mul, &a.tangent)?
                     }
                 }
                 _ => {

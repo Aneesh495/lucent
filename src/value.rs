@@ -50,7 +50,7 @@ impl Real {
 
     pub fn arithmetic(&self, op: Op, other: &Self, bits: u32) -> Result<Self> {
         if op == Op::Pow {
-            return self.power(other.as_i32()?, bits);
+            return self.rational_power(other, bits);
         }
         if let (Self::Exact(a), Self::Exact(b)) = (self, other) {
             let output = match op {
@@ -72,6 +72,26 @@ impl Real {
             Op::Div => a.div(&b)?,
             _ => return Err(Issue::Unsupported("Invalid arithmetic operator")),
         }))
+    }
+
+    pub fn rational_power(&self, exponent: &Self, bits: u32) -> Result<Self> {
+        let Self::Exact(exponent) = exponent else {
+            return Err(Issue::Unsupported(
+                "Real powers need an exact rational exponent",
+            ));
+        };
+        let (numerator, denominator) = exact::power_parts(exponent)?;
+        if denominator == 1 {
+            return self.power(numerator, bits);
+        }
+        if let Self::Exact(base) = self {
+            if let Some(root) = exact::exact_root(base, denominator)? {
+                return Ok(Self::Exact(exact::power(&root, numerator)?));
+            }
+        }
+        Ok(Self::Bounded(
+            self.enclose(bits)?.root(denominator)?.pow(numerator)?,
+        ))
     }
 
     pub fn power(&self, exponent: i32, _bits: u32) -> Result<Self> {
@@ -188,8 +208,20 @@ impl Dimension {
         self.transform(|i, x| x.checked_add(other.0[i].checked_mul(sign)?))
     }
 
-    pub fn scale(self, exponent: i32) -> Result<Self> {
-        self.transform(|_, x| i8::try_from(i32::from(x).checked_mul(exponent)?).ok())
+    pub fn power(self, exponent: &Real) -> Result<Self> {
+        let Real::Exact(exponent) = exponent else {
+            return Err(Issue::Unsupported(
+                "Dimensions require an exact rational power",
+            ));
+        };
+        let (numerator, denominator) = exact::power_parts(exponent)?;
+        let denominator = denominator as i32;
+        for power in self.0 {
+            if i32::from(power) * numerator % denominator != 0 {
+                return Err(Issue::Unsupported("Power leaves fractional unit exponents"));
+            }
+        }
+        self.transform(|_, x| i8::try_from(i32::from(x) * numerator / denominator).ok())
     }
 
     pub fn sqrt(self) -> Result<Self> {
@@ -227,7 +259,7 @@ impl Quantity {
             Op::Div => self.dimension.combine(other.dimension, -1)?,
             Op::Pow => {
                 other.dimensionless()?;
-                self.dimension.scale(other.real.as_i32()?)?
+                self.dimension.power(&other.real)?
             }
             _ => return Err(Issue::Unsupported("Invalid arithmetic operator")),
         };

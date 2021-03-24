@@ -22,6 +22,7 @@ unsafe extern "C" {
     ) -> c_int;
     fn lc_mp_unary(out: *mut c_void, a: *const c_void, op: c_int, up: c_int) -> c_int;
     fn lc_mp_pow(out: *mut c_void, a: *const c_void, n: i32, up: c_int) -> c_int;
+    fn lc_mp_root(out: *mut c_void, a: *const c_void, degree: u32, up: c_int) -> c_int;
     fn lc_mp_pi(out: *mut c_void, up: c_int) -> c_int;
     fn lc_mp_has_integer(a: *const c_void, b: *const c_void) -> c_int;
     fn lc_mp_version() -> *const c_char;
@@ -131,6 +132,12 @@ impl Float {
     pub fn pow(&self, exponent: i32, round: Direction) -> Result<Self> {
         Self::write(self.bits, |out| unsafe {
             lc_mp_pow(out, self.ptr(), exponent, round as _)
+        })
+    }
+
+    pub fn root(&self, degree: u32, round: Direction) -> Result<Self> {
+        Self::write(self.bits, |out| unsafe {
+            lc_mp_root(out, self.ptr(), degree, round as _)
         })
     }
 

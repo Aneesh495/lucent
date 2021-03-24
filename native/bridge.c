@@ -96,6 +96,12 @@ int lc_mp_pow(struct lc_float *out, const struct lc_float *a, int32_t n, int up)
     return valid(out);
 }
 
+int lc_mp_root(struct lc_float *out, const struct lc_float *a, uint32_t degree, int up) {
+    mpfr_clear_flags();
+    mpfr_rootn_ui(out->value, a->value, degree, mode(up));
+    return valid(out);
+}
+
 int lc_mp_pi(struct lc_float *out, int up) {
     mpfr_clear_flags();
     mpfr_const_pi(out->value, mode(up));
