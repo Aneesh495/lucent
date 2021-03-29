@@ -10,6 +10,7 @@
     "preview": "vite preview --host 127.0.0.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
     "@playwright/test": "1.65.0",
     "typescript": "5.9.2",
     "vite": "6.4.6"
