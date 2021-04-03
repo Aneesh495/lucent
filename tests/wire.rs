@@ -184,3 +184,25 @@ fn real_rational_powers_check_exact_roots_branches_and_units() {
     let actual = derivative["result"]["automatic"].as_array().unwrap();
     assert!(actual[0].as_f64().unwrap() <= 1.0 / 12.0 && 1.0 / 12.0 <= actual[1].as_f64().unwrap());
 }
+
+#[test]
+fn approximate_quadrature_and_singular_power_proofs_are_separate() {
+    let estimate = run(
+        json!({"op":"estimate_integral","expr":"normal_cdf(x)","domain":[-1,1],"tolerance":1e-10}),
+    );
+    assert_eq!(estimate["status"], "approximate_integral");
+    assert!((estimate["result"]["estimate"].as_f64().unwrap() - 1.0).abs() < 1e-10);
+    let excluded = run(
+        json!({"op":"estimate_integral","expr":"1/(x-.1111)","domain":[-1,1],"budget":512,"tolerance":1e-6}),
+    );
+    assert_eq!(excluded["status"], "unresolved");
+    assert!(excluded["result"]["estimate"].is_null());
+    let endpoint = run(json!({"op":"improper","expr":"x^(-1/2)","lower":0,"upper":4}));
+    assert_eq!(endpoint["result"]["enclosure"], json!([4.0, 4.0]));
+    let tail = run(json!({"op":"improper","expr":"x^(-3/2)","lower":4}));
+    assert_eq!(tail["result"]["enclosure"], json!([1.0, 1.0]));
+    assert_eq!(
+        run(json!({"op":"improper","expr":"x^(-3/2)","lower":0,"upper":4}))["status"],
+        "divergent"
+    );
+}

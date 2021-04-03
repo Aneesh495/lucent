@@ -1,4 +1,4 @@
-use num_traits::{One, ToPrimitive, Zero};
+use num_traits::{One, Zero};
 use serde::Serialize;
 
 use crate::{
@@ -7,6 +7,7 @@ use crate::{
     interval::{Interval, Issue, Result},
     lang::{Expr, Kind, Op},
     mp::Unary,
+    value::Real,
 };
 
 #[derive(Serialize, Debug)]
@@ -36,25 +37,22 @@ fn axis(expr: &Expr) -> bool {
     matches!(&expr.kind, Kind::Name(name) if name == "x")
 }
 
-fn power(expr: &Expr) -> Option<i32> {
+fn power(expr: &Expr) -> Option<Rational> {
     if axis(expr) {
-        return Some(1);
+        return Some(Rational::one());
     }
     if let Kind::Binary(Op::Pow, a, b) = &expr.kind {
         if axis(a) {
-            let n = constant(b)?;
-            if n.is_integer() {
-                return n.to_integer().to_i32();
-            }
+            return constant(b);
         }
     }
     None
 }
 
-fn family_power(expr: &Expr) -> Option<i32> {
+fn family_power(expr: &Expr) -> Option<Rational> {
     if let Kind::Binary(Op::Div, a, b) = &expr.kind {
         if constant(a)?.is_one() {
-            return power(b)?.checked_neg();
+            return Some(-power(b)?);
         }
     }
     power(expr)
@@ -70,8 +68,38 @@ fn linear(expr: &Expr) -> Option<Rational> {
     }
 }
 
-pub fn integrate(ctx: &Context, expr: &Expr, lower: f64) -> Result<Tail> {
+pub fn integrate(ctx: &Context, expr: &Expr, lower: f64, upper: Option<f64>) -> Result<Tail> {
     let bits = ctx.control.bits;
+    if let Some(upper) = upper {
+        if lower != 0.0 || upper <= 0.0 || !upper.is_finite() {
+            return Err(Issue::Unsupported(
+                "Finite endpoint mode requires [0,b] with finite positive b",
+            ));
+        }
+        let exponent = family_power(expr).ok_or(Issue::Split(
+            "No supported finite endpoint proof for this expression",
+        ))?;
+        let p = exponent + Rational::one();
+        let method = "Power test on [0,b]: b^(p+1)/(p+1) for x^p with p > -1";
+        if p <= Rational::zero() {
+            return Ok(Tail {
+                method,
+                enclosure: None,
+                divergent: true,
+            });
+        }
+        let exponent = Real::Exact(p);
+        let value = Real::Bounded(Interval::point(upper, bits)?).rational_power(&exponent, bits)?;
+        let enclosure = value
+            .arithmetic(Op::Div, &exponent, bits)?
+            .enclose(bits)?
+            .bounds()?;
+        return Ok(Tail {
+            method,
+            enclosure: Some(enclosure),
+            divergent: false,
+        });
+    }
     let a = Interval::point(lower, bits)?;
     if let Some(exponent) = family_power(expr) {
         if lower <= 0.0 {
@@ -79,17 +107,21 @@ pub fn integrate(ctx: &Context, expr: &Expr, lower: f64) -> Result<Tail> {
                 "Power tail requires a positive lower endpoint",
             ));
         }
-        let method = "Power test on [a, +infinity): a^(1-p)/(p-1) for x^(-p), p > 1";
-        if exponent >= -1 {
+        let p = exponent + Rational::one();
+        let method = "Power test on [a, +infinity): a^(p+1)/(-p-1) for x^p with p < -1";
+        if p >= Rational::zero() {
             return Ok(Tail {
                 method,
                 enclosure: None,
                 divergent: true,
             });
         }
-        let exponent = exponent.checked_add(1).ok_or(Issue::Budget)?;
-        let divisor = Interval::point(-f64::from(exponent), bits)?;
-        let enclosure = a.pow(exponent)?.div(&divisor)?.bounds()?;
+        let exponent = Real::Exact(p);
+        let value = Real::Bounded(a).rational_power(&exponent, bits)?;
+        let enclosure = value
+            .arithmetic(Op::Div, &exponent.neg()?, bits)?
+            .enclose(bits)?
+            .bounds()?;
         return Ok(Tail {
             method,
             enclosure: Some(enclosure),

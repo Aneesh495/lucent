@@ -165,6 +165,11 @@ enum Action {
     Improper {
         expr: String,
         lower: f64,
+        upper: Option<f64>,
+    },
+    EstimateIntegral {
+        expr: String,
+        domain: [f64; 2],
     },
     Derivative {
         expr: String,
@@ -572,9 +577,18 @@ impl Job {
                     "assumptions":["Full finite interval coverage required","Simpson panels use an enclosed fourth derivative","Range panels use an interval range times panel width"]}),
                 )
             }
-            Action::Improper { expr, lower } => {
+            Action::EstimateIntegral { expr, domain } => {
                 let expr = expression(expr)?;
-                let result = crate::improper::integrate(&ctx, &expr, *lower)?;
+                let result = crate::quadrature::estimate(&ctx, &expr, *domain, self.tolerance)?;
+                Ok(
+                    json!({"status":if result.estimate.is_some() {"approximate_integral"} else {"unresolved"},
+                    "result":result,"assumptions":["Adaptive Simpson step difference estimates error",
+                    "Interval domain checks precede accepting a panel","Estimated error has no enclosure guarantee"]}),
+                )
+            }
+            Action::Improper { expr, lower, upper } => {
+                let expr = expression(expr)?;
+                let result = crate::improper::integrate(&ctx, &expr, *lower, *upper)?;
                 Ok(
                     json!({"status":if result.divergent { "divergent" } else { "improper_enclosure" },
                     "precision":self.bits,"result":result,"assumptions":[result.method]}),
@@ -920,7 +934,6 @@ fn verify_curve(ctx: &Context, problem: &CurveProblem, cells: &[CurveCell]) -> R
         return Err(Issue::Unsupported("Missing or excessive curve cells").into());
     }
     let mut end = problem.domain[0];
-    let mut segments = 0;
     for cell in cells {
         if cell.domain[0] != end || !graph::valid_domain(cell.domain) {
             return Err(Issue::Unsupported("Curve coverage has a gap or overlap").into());
@@ -938,13 +951,12 @@ fn verify_curve(ctx: &Context, problem: &CurveProblem, cells: &[CurveCell]) -> R
                 )
                 .into());
             }
-            segments += 1;
         } else if cell.kind == graph::CellKind::Segment {
             return Err(Issue::Unsupported("Missing segment payload").into());
         }
     }
-    if end != problem.domain[1] || segments == 0 {
-        return Err(Issue::Unsupported("Coverage is incomplete or has no segments").into());
+    if end != problem.domain[1] {
+        return Err(Issue::Unsupported("Curve coverage is incomplete").into());
     }
     Ok(())
 }

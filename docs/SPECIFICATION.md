@@ -30,7 +30,8 @@ Native stdin accepts a UTF-8 JSON object per line with a 64 KiB limit. Browser w
 | `roots`, `integral` | `expr`, increasing numeric `domain` |
 | `polynomial` | Rational polynomial `expr`, two exact strings in `domain` |
 | `feature` | `kind`, `expr`, increasing `domain`, `other` for paired operations |
-| `improper` | `expr`, `lower`; upper endpoint is positive infinity |
+| `improper` | `expr`, `lower`; optional finite `upper` selects a supported singularity at zero |
+| `estimate_integral` | `expr`, `domain`; returns an estimate and a step-difference error indicator |
 | `derivative` | `expr`, `at` |
 | `table` | `expr`, numeric `samples` |
 | `surface`, `isosurface` | `expr`, `space: {x, y, z}`, `depth`; parametric mode also uses `x`, `y`, `parameter_domain` |

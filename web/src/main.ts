@@ -126,6 +126,7 @@ function explain(result: EngineResult): void {
     if (Array.isArray(p.points)) for (const point of p.points.slice(0, 10)) {
       evidence.append(el('p', point.classification.replaceAll('_', ' ') + ' · ' + JSON.stringify(point.root.bracket)));
     }
+    if (typeof p.estimate === 'number') evidence.append(el('p', 'Estimate ' + p.estimate + ' · estimated error ' + p.estimated_error));
     if (Array.isArray(p.enclosure)) evidence.append(el('p', textResult({ bounds: p.enclosure })));
     if (Array.isArray(p.panels)) evidence.append(el('p', p.panels.length + ' quadrature panels'));
     if (Array.isArray(p.unresolved) && p.unresolved.length) evidence.append(el('p', p.unresolved.length + ' unresolved subintervals'));
@@ -645,6 +646,7 @@ function calculate(): void {
   const fields = op === 'evaluate' ? { bindings: { x: lower.value } }
     : op === 'derivative' ? { at: a }
     : op === 'improper' ? { lower: a }
+    : op === 'improper_zero' ? { lower: a, upper: b }
     : op === 'quantile' ? { probability: lower.value }
     : op === 'polynomial' ? { domain: [lower.value, upper.value] }
     : { domain: [a, b] };
@@ -654,7 +656,7 @@ function calculate(): void {
   }
   const feature = ['intersection', 'extrema', 'tangency', 'area_between'].includes(op);
   const other = history.current.cells.find(item => item.id === second.value);
-  const request = { ...environment(history.current), op: feature ? 'feature' : op, expr: c.source, ...fields, bits: 128, budget: 8192,
+  const request = { ...environment(history.current), op: feature ? 'feature' : op === 'improper_zero' ? 'improper' : op, expr: c.source, ...fields, bits: 128, budget: 8192,
     ...(feature ? { kind: op, other: other?.source } : {}) };
   evidence.replaceChildren(badge('pending', 'neutral'), el('p', 'Computing in a worker…'));
   setDisabled('calculate', true);

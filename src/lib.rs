@@ -21,6 +21,7 @@ pub mod linear;
 pub mod ode;
 pub mod polynomial;
 pub mod program;
+pub mod quadrature;
 pub mod simplify;
 pub mod spatial;
 pub mod statistics;
