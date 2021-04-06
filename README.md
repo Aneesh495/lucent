@@ -4,6 +4,8 @@ Lucent is an interactive graphing workbench with an original Rust engine. Edit a
 
 [Open the browser preview](https://aneesh495.github.io/lucent/)
 
+![Lucent workbench showing three computed curves and a narrow unresolved band near a pole](docs/media/workspace.png)
+
 ## Try it
 
 Plot `1/(x-.000013)`. The curve stays separated at the pole, and the uncertainty overlay tracks the unresolved cell as you zoom. For an exact multiplicity result, open **Repeated roots** and calculate in the inspector. The gallery also includes complex branches, phase-plane trajectories, surfaces, residual plots and normal probability plots.
@@ -31,6 +33,6 @@ The first request gives `8/15`. The second includes a bracket for the positive r
 - [Adaptive graph cells](src/graph.rs), [spatial mesh](src/spatial.rs), and [browser worker](web/src/engine.ts)
 - [Evidence protocol](docs/EXPERIMENT_PLAN.md), [independent verifier](scripts/verify-evidence.py), and [build status](docs/BUILD_STATUS.md)
 
-The frozen diagnostic covers 10,000 scalar, 2,000 graph, 500 adversarial and 160 calculus cases. The worst independently sampled deviation on the regular explicit curves was 0.447 CSS pixels. Implicit chords and 3D meshes remain approximate geometry. The hosted preview is under active development.
+The frozen diagnostic covers 10,000 scalar, 2,000 graph, 500 adversarial and 160 calculus cases. The worst independently sampled deviation on the regular explicit curves was 0.447 CSS pixels. Implicit chords and 3D meshes remain approximate geometry. See [the observed results](docs/FINDINGS.md) for the exact source, measurements and verification command.
 
 [Language and schema](docs/SPECIFICATION.md) · [Architecture and diagrams](docs/ARCHITECTURE.md) · [Numerical notes](docs/NOTES.md) · [Walkthroughs](docs/WALKTHROUGHS.md) · [Design decisions](docs/DECISIONS.md)

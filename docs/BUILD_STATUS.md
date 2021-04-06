@@ -1,6 +1,6 @@
 # Build status
 
-Lucent has a working native CLI, a browser WASM workspace, and a hosted preview. The release gate is open. The supported contracts and open questions are recorded in [the specification](SPECIFICATION.md) and [experiment plan](EXPERIMENT_PLAN.md).
+Lucent has a working native CLI, a browser WASM workspace, and a hosted preview. Full acceptance remains incomplete. The supported contracts and open questions are recorded in [the specification](SPECIFICATION.md) and [experiment plan](EXPERIMENT_PLAN.md).
 
 | Gate | Current evidence | Status |
 | --- | --- | --- |
@@ -12,13 +12,13 @@ Lucent has a working native CLI, a browser WASM workspace, and a hosted preview.
 | G06 Roots | Repeated-root fixtures, regular-root witnesses and a separate known-root polynomial oracle | Broader edge coverage unverified |
 | G07 Calculus | 160 finite-calculus fixtures plus targeted derivative and improper-tail cases | Broader improper and conditioning cases unverified |
 | G08 Complex, 3D and ODE | Branch-cut, sphere, surface-hole and trajectory-event tests | Full campaign unverified |
-| G09 Interaction | Headless Chromium performance observations | Failed median FPS threshold in the pilot |
-| G10 Cancellation | Measured worker termination and later-generation checks | Passed in the headless pilot |
+| G09 Interaction | Headless Chromium performance observations | Failed at 59.88 median FPS in the exact-source audit |
+| G10 Cancellation | Measured worker termination and later-generation checks | Passed in the headless audit |
 | G11 Workspace | Versioned migration and 5,500 generated operations with recovery | Passed in the diagnostic |
-| G12 Accessibility | Keyboard, focus and narrow-viewport Chromium tests | Comprehensive accessibility audit unverified |
+| G12 Accessibility | Keyboard, focus and zero automated violations at two Chromium viewports | Comprehensive accessibility audit unverified |
 | G13 Export | Independently decoded JSON, SVG and PNG metadata plus certificate checks | Independent pixel and 3D reconstruction unverified |
 | G14 Semantic verification | Authentic and rehashed altered claims through the CLI and bundle verifier | Passed for covered claim types |
 | G15 Reproduction | Clean source builds, real Chromium worker corpus and editable gallery | Complete capability matrix unverified |
 | G16 Release | Hosted preview available | Incomplete |
 
-The continuous integration build and preview deployment validate their own source revisions. See [reproduction and recovery](RECOVERY.md) for exact local commands and evidence handling.
+The [observed results](FINDINGS.md) identify the executable source, commands, measurements and raw evidence. [Capability coverage](COVERAGE.md) links the individual subsystems. See [reproduction and recovery](RECOVERY.md) for exact local commands and evidence handling.
